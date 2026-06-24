@@ -1,0 +1,6 @@
+{
+  "name": "ملک‌آپ",
+  "description": "سیستم مدیریت فایلهای رهن و اجاره املاک - MelkUp Property Rental Management",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
