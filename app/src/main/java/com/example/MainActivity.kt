@@ -1,11 +1,14 @@
 package com.example
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.animation.core.spring
@@ -53,6 +56,8 @@ import kotlinx.coroutines.flow.StateFlow
 import com.example.ui.viewmodel.PropertyStats
 import com.example.ui.viewmodel.PropertyViewModel
 import com.example.util.PersianUtils
+import com.example.util.LicenseManager
+import com.example.util.LicenseStatus
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -97,10 +102,16 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
     var showDetailsDialog by remember { mutableStateOf(false) }
     var showBackupDialog by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
+    var showShareFileNameDialog by remember { mutableStateOf(false) }
+    var sharePropertiesList by remember { mutableStateOf<List<Property>>(emptyList()) }
     var propertyToEdit by remember { mutableStateOf<Property?>(null) }
     var propertyToView by remember { mutableStateOf<Property?>(null) }
 
     var currentTab by remember { mutableStateOf("home") }
+    var isCompactView by remember { mutableStateOf(false) }
+
+    var licenseStatus by remember { mutableStateOf(LicenseManager.checkLicenseStatus(context)) }
+    var showActivationLockDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -117,12 +128,13 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.primary),
+                                .background(Color.White)
+                                .border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "MU",
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Black,
                                 fontSize = 16.sp
                             )
@@ -133,11 +145,11 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = "ملک‌آپ",
-                                fontWeight = FontWeight.Black,
+                                text = "ملک آپ",
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
-                                fontSize = 20.sp,
-                                lineHeight = 20.sp,
+                                fontSize = 22.sp,
+                                lineHeight = 22.sp,
                                 modifier = Modifier.offset(y = 2.dp)
                             )
                             Text(
@@ -176,80 +188,100 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
             )
         },
         bottomBar = {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                contentAlignment = Alignment.Center
+                    .navigationBarsPadding(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(24.dp),
-                    tonalElevation = 6.dp,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-                ) {
-                    Row(
+                // Horizontal Add File button, visible only in home & all_files
+                if (currentTab == "home" || currentTab == "all_files") {
+                    Button(
+                        onClick = {
+                            if (!licenseStatus.isValid && rawProperties.size >= 3) {
+                                showActivationLockDialog = true
+                            } else {
+                                propertyToEdit = null // Fresh property
+                                showAddEditDialog = true
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .height(46.dp)
+                            .testTag("add_property_horizontal_button"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
                     ) {
-                        FloatingNavItem(
-                            selected = currentTab == "home",
-                            onClick = { currentTab = "home" },
-                            icon = { Icon(Icons.Default.Home, contentDescription = "داشبورد") },
-                            label = "داشبورد"
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(18.dp)
                         )
-                        FloatingNavItem(
-                            selected = currentTab == "all_files",
-                            onClick = { currentTab = "all_files" },
-                            icon = { Icon(Icons.Default.List, contentDescription = "کل فایل‌ها") },
-                            label = "کل فایل‌ها"
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "افزودن فایل جدید",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onPrimary
                         )
-                        FloatingNavItem(
-                            selected = currentTab == "prompt_generator",
-                            onClick = { currentTab = "prompt_generator" },
-                            icon = { Icon(Icons.Default.AutoAwesome, contentDescription = "پرامپت استوری") },
-                            label = "پرامپت استوری"
-                        )
-                        FloatingNavItem(
-                            selected = currentTab == "settings",
-                            onClick = { currentTab = "settings" },
-                            icon = { Icon(Icons.Default.Settings, contentDescription = "تنظیمات") },
-                            label = "تنظیمات"
-                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(24.dp),
+                        tonalElevation = 6.dp,
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FloatingNavItem(
+                                selected = currentTab == "home",
+                                onClick = { currentTab = "home" },
+                                icon = { Icon(Icons.Default.Home, contentDescription = "داشبورد") },
+                                label = "داشبورد"
+                            )
+                            FloatingNavItem(
+                                selected = currentTab == "all_files",
+                                onClick = { currentTab = "all_files" },
+                                icon = { Icon(Icons.Default.List, contentDescription = "کل فایل‌ها") },
+                                label = "کل فایل‌ها"
+                            )
+                            FloatingNavItem(
+                                selected = currentTab == "prompt_generator",
+                                onClick = { currentTab = "prompt_generator" },
+                                icon = { Icon(Icons.Default.AutoAwesome, contentDescription = "پرامپت استوری") },
+                                label = "پرامپت استوری"
+                            )
+                            FloatingNavItem(
+                                selected = currentTab == "settings",
+                                onClick = { currentTab = "settings" },
+                                icon = { Icon(Icons.Default.Settings, contentDescription = "تنظیمات") },
+                                label = "تنظیمات"
+                            )
+                        }
                     }
                 }
             }
         },
-        floatingActionButton = {
-            if (currentTab == "home" || currentTab == "all_files") {
-                FloatingActionButton(
-                    onClick = {
-                        viewModel.getNextPropertyCode { code ->
-                            propertyToEdit = null // Fresh property
-                            showAddEditDialog = true
-                        }
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .navigationBarsPadding()
-                        .padding(bottom = 0.dp)
-                        .testTag("add_property_fab")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "افزودن فایل",
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-        }
+        floatingActionButton = {}
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -454,6 +486,10 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                                     onDelete = {
                                         viewModel.deleteProperty(property)
                                         Toast.makeText(context, "فایل حذف شد", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onShare = {
+                                        sharePropertiesList = listOf(property)
+                                        showShareFileNameDialog = true
                                     }
                                 )
                             }
@@ -475,7 +511,7 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                                         Icon(Icons.Default.List, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "مشاهده فایل‌های بیشتر 📊",
+                                            text = "مشاهده فایل‌های بیشتر",
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                                             fontSize = 13.sp
@@ -588,6 +624,15 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                                     val text = PersianUtils.generateGroupFullOutput(selectedProps, copyFormat, context)
                                     PersianUtils.copyToClipboard(context, text)
                                 }
+                            },
+                            onShareSelected = {
+                                val selectedProps = properties.filter { selectedPropertyIds.contains(it.id) }
+                                if (selectedProps.isEmpty()) {
+                                    Toast.makeText(context, "هیچ فایلی انتخاب نشده است", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    sharePropertiesList = selectedProps
+                                    showShareFileNameDialog = true
+                                }
                             }
                         )
                     }
@@ -600,16 +645,68 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "نمایش ${PersianUtils.formatNumber(properties.size)} فایل از ${PersianUtils.formatNumber(rawProperties.size)}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "نمایش ${PersianUtils.formatNumber(properties.size)} فایل",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            )
+
+                            var viewMenuExpanded by remember { mutableStateOf(false) }
+                            Box {
+                                OutlinedButton(
+                                    onClick = { viewMenuExpanded = true },
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(34.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                                ) {
+                                    Text(
+                                        text = if (isCompactView) "مشاهده خلاصه" else "مشاهده کارت",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+
+                                DropdownMenu(
+                                    expanded = viewMenuExpanded,
+                                    onDismissRequest = { viewMenuExpanded = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("مشاهده خلاصه", fontSize = 12.sp) },
+                                        onClick = {
+                                            isCompactView = true
+                                            viewMenuExpanded = false
+                                        },
+                                        leadingIcon = { Icon(Icons.Default.ViewList, null, modifier = Modifier.size(16.dp)) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("مشاهده کارت", fontSize = 12.sp) },
+                                        onClick = {
+                                            isCompactView = false
+                                            viewMenuExpanded = false
+                                        },
+                                        leadingIcon = { Icon(Icons.Default.GridView, null, modifier = Modifier.size(16.dp)) }
+                                    )
+                                }
+                            }
+                        }
 
                         if (rawProperties.isNotEmpty()) {
                             TextButton(
                                 onClick = {
-                                    val text = PersianUtils.generateGroupSummaryOutput(rawProperties)
+                                    val text = PersianUtils.generateGroupSummaryOutput(context, rawProperties)
                                     PersianUtils.copyToClipboard(context, text, "MelkUp All Properties")
                                 },
                                 modifier = Modifier.testTag("export_all_button")
@@ -641,44 +738,88 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                             contentPadding = PaddingValues(bottom = 80.dp)
                         ) {
                             items(properties, key = { it.id }) { property ->
-                                PropertyCardItem(
-                                    property = property,
-                                    isSelectionMode = isSelectionMode,
-                                    isSelected = selectedPropertyIds.contains(property.id),
-                                    onCardClick = {
-                                        if (isSelectionMode) {
-                                            viewModel.toggleSelection(property.id)
-                                        } else {
-                                            propertyToView = property
-                                            showDetailsDialog = true
+                                if (isCompactView) {
+                                    CompactPropertyItem(
+                                        property = property,
+                                        isSelected = selectedPropertyIds.contains(property.id),
+                                        onCardClick = {
+                                            if (isSelectionMode) {
+                                                viewModel.toggleSelection(property.id)
+                                            } else {
+                                                propertyToView = property
+                                                showDetailsDialog = true
+                                            }
+                                        },
+                                        onSelectionToggle = { viewModel.toggleSelection(property.id) },
+                                        isSelectionMode = isSelectionMode,
+                                        onDelete = {
+                                            viewModel.deleteProperty(property)
+                                            Toast.makeText(context, "فایل حذف شد", Toast.LENGTH_SHORT).show()
                                         }
-                                    },
-                                    onSelectionToggle = { viewModel.toggleSelection(property.id) },
-                                    onToggleSpecial = { viewModel.toggleSpecial(property) },
-                                    onQuickCopy = {
-                                        val copyFormat = prefs.getString("copy_format", "standard") ?: "standard"
-                                        val text = PersianUtils.generateSingleTelegramOutput(context, property, copyFormat)
-                                        PersianUtils.copyToClipboard(context, text)
-                                    },
-                                    onEdit = {
-                                        propertyToEdit = property
-                                        showAddEditDialog = true
-                                    },
-                                    onDelete = {
-                                        viewModel.deleteProperty(property)
-                                        Toast.makeText(context, "فایل حذف شد", Toast.LENGTH_SHORT).show()
-                                    }
-                                )
+                                    )
+                                } else {
+                                    PropertyCardItem(
+                                        property = property,
+                                        isSelectionMode = isSelectionMode,
+                                        isSelected = selectedPropertyIds.contains(property.id),
+                                        onCardClick = {
+                                            if (isSelectionMode) {
+                                                viewModel.toggleSelection(property.id)
+                                            } else {
+                                                propertyToView = property
+                                                showDetailsDialog = true
+                                            }
+                                        },
+                                        onSelectionToggle = { viewModel.toggleSelection(property.id) },
+                                        onToggleSpecial = { viewModel.toggleSpecial(property) },
+                                        onQuickCopy = {
+                                            val copyFormat = prefs.getString("copy_format", "standard") ?: "standard"
+                                            val text = PersianUtils.generateSingleTelegramOutput(context, property, copyFormat)
+                                            PersianUtils.copyToClipboard(context, text)
+                                        },
+                                        onEdit = {
+                                            propertyToEdit = property
+                                            showAddEditDialog = true
+                                        },
+                                        onDelete = {
+                                            viewModel.deleteProperty(property)
+                                            Toast.makeText(context, "فایل حذف شد", Toast.LENGTH_SHORT).show()
+                                        },
+                                        onShare = {
+                                            sharePropertiesList = listOf(property)
+                                            showShareFileNameDialog = true
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
                 "prompt_generator" -> {
-                    // --- AI PROMPT GENERATOR PAGE ---
-                    AiPromptGeneratorScreen(
-                        properties = rawProperties,
-                        context = context
-                    )
+                    if (!licenseStatus.isValid) {
+                        LicenseLockScreen(
+                            androidId = LicenseManager.getAndroidId(context),
+                            onActivate = { key ->
+                                val androidId = LicenseManager.getAndroidId(context)
+                                if (LicenseManager.isValidLicense(key, androidId)) {
+                                    prefs.edit()
+                                        .putString("license_key", key.trim().uppercase())
+                                        .putLong("license_activation_time", System.currentTimeMillis())
+                                        .apply()
+                                    licenseStatus = LicenseManager.checkLicenseStatus(context)
+                                    Toast.makeText(context, "برنامه با موفقیت فعال شد! 🎉", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "کد فعال‌سازی نامعتبر است!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+                    } else {
+                        // --- AI PROMPT GENERATOR PAGE ---
+                        AiPromptGeneratorScreen(
+                            properties = rawProperties,
+                            context = context
+                        )
+                    }
                 }
                 "settings" -> {
                     // --- SETTINGS PAGE ---
@@ -695,7 +836,12 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                                     Toast.makeText(context, "خطا در فرمت کد پشتیبان!", Toast.LENGTH_SHORT).show()
                                 }
                             }
-                        }
+                        },
+                        licenseStatus = licenseStatus,
+                        onLicenseChanged = {
+                            licenseStatus = LicenseManager.checkLicenseStatus(context)
+                        },
+                        propertiesCount = rawProperties.size
                     )
                 }
             }
@@ -703,6 +849,105 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
     }
 
     // --- DIALOGS & OVERLAYS ---
+
+    if (showActivationLockDialog) {
+        val androidId = LicenseManager.getAndroidId(context)
+        var dialogKeyInput by remember { mutableStateOf("") }
+        
+        AlertDialog(
+            onDismissRequest = { showActivationLockDialog = false },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Text("محدودیت تعداد فایل‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "شما از ۳ فایل رایگان خود استفاده کرده‌اید. برای ثبت فایل‌های بیشتر و نامحدود، لایسنس خود را وارد کرده و فعال‌سازی کنید.",
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                    
+                    Text(
+                        text = "کد کاربری دستگاه شما:",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                PersianUtils.copyToClipboard(context, androidId, "کد کاربری")
+                                Toast.makeText(context, "کد کاربری کپی شد", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
+                        Text(androidId, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    
+                    OutlinedTextField(
+                        value = dialogKeyInput,
+                        onValueChange = { dialogKeyInput = it },
+                        label = { Text("کد فعال‌سازی (لایسنس)") },
+                        placeholder = { Text("مثال: ZZZ1-ABCD") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (LicenseManager.isValidLicense(dialogKeyInput, androidId)) {
+                            prefs.edit()
+                                .putString("license_key", dialogKeyInput.trim().uppercase())
+                                .putLong("license_activation_time", System.currentTimeMillis())
+                                .apply()
+                            licenseStatus = LicenseManager.checkLicenseStatus(context)
+                            showActivationLockDialog = false
+                            Toast.makeText(context, "برنامه با موفقیت فعال شد! 🎉", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(context, "کد فعال‌سازی نامعتبر است!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    enabled = dialogKeyInput.trim().isNotEmpty()
+                ) {
+                    Text("فعال‌سازی")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showActivationLockDialog = false }) {
+                    Text("انصراف")
+                }
+            }
+        )
+    }
 
     if (showAddEditDialog) {
         AddEditPropertyDialog(
@@ -775,6 +1020,14 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
             sortAscending = sortAscending,
             onSortAscendingChange = { viewModel.sortAscending.value = it },
             onDismiss = { showSearchDialog = false }
+        )
+    }
+
+    if (showShareFileNameDialog) {
+        ShareFileNameDialog(
+            properties = sharePropertiesList,
+            onDismiss = { showShareFileNameDialog = false },
+            onShareComplete = { showShareFileNameDialog = false }
         )
     }
 }
@@ -1115,7 +1368,8 @@ fun GroupSelectionBar(
     onSelectAll: () -> Unit,
     onClearSelection: () -> Unit,
     onCopySummary: () -> Unit,
-    onCopyFull: () -> Unit
+    onCopyFull: () -> Unit,
+    onShareSelected: () -> Unit
 ) {
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
@@ -1163,6 +1417,15 @@ fun GroupSelectionBar(
                 ) {
                     Text("کپی کامل", fontSize = 11.sp)
                 }
+                Spacer(modifier = Modifier.width(4.dp))
+                Button(
+                    onClick = onShareSelected,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("ارسال 📤", fontSize = 11.sp)
+                }
             }
         }
     }
@@ -1178,7 +1441,8 @@ fun PropertyCardItem(
     onToggleSpecial: () -> Unit,
     onQuickCopy: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onShare: () -> Unit
 ) {
     var expandedMenu by remember { mutableStateOf(false) }
 
@@ -1465,6 +1729,14 @@ fun PropertyCardItem(
                                 leadingIcon = { Icon(Icons.Default.Edit, null) }
                             )
                             DropdownMenuItem(
+                                text = { Text("ارسال فایل (اشتراک)") },
+                                onClick = {
+                                    expandedMenu = false
+                                    onShare()
+                                },
+                                leadingIcon = { Icon(Icons.Default.Share, null) }
+                            )
+                            DropdownMenuItem(
                                 text = { Text("حذف فایل") },
                                 onClick = {
                                     expandedMenu = false
@@ -1722,7 +1994,7 @@ fun PropertyDetailsDialog(
                                 SpecRow("تعداد خواب", "${PersianUtils.formatNumber(property.bedrooms)} خواب")
 
                                 if (property.type == "آپارتمان") {
-                                    if (property.totalFloors != null) SpecRow("تعداد طبقات ساختمان", "${PersianUtils.formatNumber(property.totalFloors)} طبقه")
+                                    if (property.totalFloors != null) SpecRow("کل طبقات", "${PersianUtils.formatNumber(property.totalFloors)} طبقه")
                                     if (property.unitFloor != null) SpecRow("طبقه واحد", PersianUtils.formatNumber(property.unitFloor))
                                 }
 
@@ -1977,10 +2249,14 @@ fun AddEditPropertyDialog(
     viewModel: PropertyViewModel
 ) {
     var type by remember { mutableStateOf(property?.type ?: "آپارتمان") }
+    var code by remember { mutableStateOf(property?.code ?: "") }
     var region by remember { mutableStateOf(property?.region ?: "") }
     var area by remember { mutableStateOf(property?.area?.toString() ?: "") }
     var bedrooms by remember { mutableStateOf(property?.bedrooms?.toString() ?: "2") }
     var description by remember { mutableStateOf(property?.description ?: "") }
+    
+    // Auto populate next code if empty (Requirement 6)
+    val rawProperties by viewModel.allProperties.collectAsStateWithLifecycle()
     
     // Apartment Specific fields
     var totalFloors by remember { mutableStateOf(property?.totalFloors?.toString() ?: "") }
@@ -2002,7 +2278,7 @@ fun AddEditPropertyDialog(
     var rentAmount by remember { mutableStateOf(property?.rentAmount?.toLong()?.toString() ?: "") }
 
     // Internal Agency Details
-    var isCollaborative by remember { mutableStateOf(property?.isCollaborative ?: true) }
+    var isCollaborative by remember { mutableStateOf(property?.isCollaborative ?: false) }
     var ownerName by remember { mutableStateOf(property?.ownerName ?: "") }
     var ownerPhone by remember { mutableStateOf(property?.ownerPhone ?: "") }
     var followUpStatus by remember { mutableStateOf(property?.followUpStatus ?: "تماس گرفته شد") }
@@ -2014,9 +2290,95 @@ fun AddEditPropertyDialog(
         )
     }
 
+    var cameraTempUri by remember { mutableStateOf<Uri?>(null) }
+    var showImageSourceDialog by remember { mutableStateOf(false) }
+
+    // Helpers for camera/gallery storage
+    val context = LocalContext.current
+    
+    fun createCameraUri(ctx: Context): Uri {
+        val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+        val fileName = "JPEG_${timeStamp}_"
+        val storageDir = ctx.getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)
+        val file = java.io.File.createTempFile(fileName, ".jpg", storageDir)
+        return androidx.core.content.FileProvider.getUriForFile(
+            ctx,
+            "${ctx.packageName}.fileprovider",
+            file
+        )
+    }
+
+    fun copyUriToInternalStorage(ctx: Context, uri: Uri): String? {
+        return try {
+            val resolver = ctx.contentResolver
+            val inputStream = resolver.openInputStream(uri) ?: return null
+            val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
+            val fileName = "PropertyImg_${timeStamp}.jpg"
+            val storageDir = ctx.getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)
+            val file = java.io.File(storageDir, fileName)
+            
+            val outputStream = java.io.FileOutputStream(file)
+            val buffer = ByteArray(4 * 1024)
+            var bytesRead: Int
+            inputStream.use { input ->
+                outputStream.use { output ->
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                    }
+                }
+            }
+            file.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    // Gallery Launcher
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            val copiedUris = uris.mapNotNull { uri ->
+                copyUriToInternalStorage(context, uri)
+            }
+            selectedImageUrlList = selectedImageUrlList + copiedUris
+        }
+    }
+
+    // Camera Launcher
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            cameraTempUri?.let { uri ->
+                val copiedUri = copyUriToInternalStorage(context, uri)
+                if (copiedUri != null) {
+                    selectedImageUrlList = selectedImageUrlList + copiedUri
+                }
+            }
+        }
+    }
+
+    // Camera Permission Launcher
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            try {
+                val uri = createCameraUri(context)
+                cameraTempUri = uri
+                cameraLauncher.launch(uri)
+            } catch (e: Exception) {
+                Toast.makeText(context, "خطا در آماده‌سازی دوربین", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "برای گرفتن عکس به دسترسی دوربین نیاز است", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val scaffoldState = rememberBottomSheetScaffoldState()
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
 
     val amenitiesOptions = listOf("آسانسور", "انباری", "تراس", "حیاط", "استخر", "پکیج", "کولر گازی")
     val followUpOptions = listOf("تماس گرفته شد", "منتظر پاسخ", "بازدید انجام شد", "در حال مذاکره")
@@ -2150,6 +2512,26 @@ fun AddEditPropertyDialog(
                                 }
                             }
 
+                            // Unique Property Code Input (Requirement 6)
+                            OutlinedTextField(
+                                value = code,
+                                onValueChange = { code = it.trim() },
+                                modifier = Modifier.fillMaxWidth().testTag("property_code_input"),
+                                label = { Text("کد فایل اختصاصی *") },
+                                leadingIcon = { Icon(Icons.Default.QrCode, null) },
+                                shape = RoundedCornerShape(12.dp),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                                supportingText = {
+                                    Text(
+                                        text = "کد نمی‌تواند تکراری باشد",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            )
+
                             // Region Autocomplete Input
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 OutlinedTextField(
@@ -2219,7 +2601,7 @@ fun AddEditPropertyDialog(
                                         value = totalFloors,
                                         onValueChange = { totalFloors = it },
                                         modifier = Modifier.weight(1f).testTag("total_floors_input"),
-                                        label = { Text("تعداد طبقات ساختمان") },
+                                        label = { Text("کل طبقات") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         shape = RoundedCornerShape(12.dp)
                                     )
@@ -2475,8 +2857,76 @@ fun AddEditPropertyDialog(
                                             onCheckedChange = { isCollaborative = it }
                                         )
                                     }
+                                }
+                            }
 
+                            // --- IMAGES SECTION (Requirement 2) ---
+                            Text("📸 تصاویر ملک (انتخاب از گالری یا دوربین)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Button(
+                                    onClick = { galleryLauncher.launch("image/*") },
+                                    modifier = Modifier.weight(1f).height(46.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("انتخاب از گالری", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                
+                                Button(
+                                    onClick = { cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA) },
+                                    modifier = Modifier.weight(1f).height(46.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("ثبت با دوربین", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
 
+                            // Selected Image Preview Row
+                            if (selectedImageUrlList.isNotEmpty()) {
+                                LazyRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                ) {
+                                    items(selectedImageUrlList) { path ->
+                                        Box(
+                                            modifier = Modifier
+                                                .size(100.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                                        ) {
+                                            AsyncImage(
+                                                model = if (path.startsWith("/")) java.io.File(path) else path,
+                                                contentDescription = "تصویر ملک",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                            IconButton(
+                                                onClick = { selectedImageUrlList = selectedImageUrlList.filter { it != path } },
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(4.dp)
+                                                    .size(24.dp)
+                                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "حذف",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
@@ -2501,126 +2951,161 @@ fun AddEditPropertyDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                        if (currentStep > 1) {
-                            OutlinedButton(
-                                onClick = { currentStep-- },
-                                modifier = Modifier.weight(1f).height(42.dp),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("مرحله قبلی", fontSize = 13.sp)
-                            }
-                        } else {
-                            Spacer(modifier = Modifier.weight(0.5f))
-                        }
-
-                        Button(
-                            onClick = {
-                                // Validate each step before moving forward
-                                if (currentStep == 1) {
-                                    if (region.trim().isEmpty() || area.trim().isEmpty() || bedrooms.trim().isEmpty()) {
-                                        Toast.makeText(context, "لطفاً موارد ستاره‌دار را تکمیل کنید.", Toast.LENGTH_SHORT).show()
-                                        return@Button
-                                    }
-
-                                    val doubleArea = area.toDoubleOrNull()
-                                    val intBedrooms = bedrooms.toIntOrNull()
-                                    if (doubleArea == null || intBedrooms == null) {
-                                        Toast.makeText(context, "متراژ و تعداد خواب باید عدد معتبر باشند.", Toast.LENGTH_SHORT).show()
-                                        return@Button
-                                    }
-                                    currentStep++
-                                } else if (currentStep == 2) {
-                                    currentStep++
-                                } else if (currentStep == 3) {
-                                    val depVal = depositAmount.toDoubleOrNull()
-                                    val rentVal = rentAmount.toDoubleOrNull()
-
-                                    if (financialMode == "RENT_AND_MORTGAGE" && depVal == null && rentVal == null) {
-                                        Toast.makeText(context, "لطفاً حداقل یکی از مقادیر رهن یا اجاره را وارد کنید.", Toast.LENGTH_SHORT).show()
-                                        return@Button
-                                    }
-                                    if (financialMode == "FULL_MORTGAGE" && depVal == null) {
-                                        Toast.makeText(context, "لطفاً مقدار رهن کامل را وارد کنید.", Toast.LENGTH_SHORT).show()
-                                        return@Button
-                                    }
-                                    if (financialMode == "FULL_RENT" && rentVal == null) {
-                                        Toast.makeText(context, "لطفاً مقدار اجاره کامل را وارد کنید.", Toast.LENGTH_SHORT).show()
-                                        return@Button
-                                    }
-                                    currentStep++
-                                } else {
-                                    // Save execution on final step
-                                    val doubleArea = area.toDoubleOrNull() ?: 0.0
-                                    val intBedrooms = bedrooms.toIntOrNull() ?: 0
-                                    val depVal = depositAmount.toDoubleOrNull()
-                                    val rentVal = rentAmount.toDoubleOrNull()
-
-                                    // Generate or keep code
-                                    viewModel.getNextPropertyCode { nextCode ->
-                                        val finalCode = property?.code ?: nextCode
-
-                                        // Combine selected amenities and custom amenities if shown
-                                        val allAmenities = if (showOptionalAmenities) {
-                                            (selectedAmenitiesList + customAmenitiesText.split(",")
-                                                .map { it.trim() }
-                                                .filter { it.isNotEmpty() }).joinToString(", ")
-                                        } else {
-                                            ""
-                                        }
-
-                                        val finalProperty = Property(
-                                            id = property?.id ?: 0L,
-                                            code = finalCode,
-                                            type = type,
-                                            region = region,
-                                            area = doubleArea,
-                                            bedrooms = intBedrooms,
-                                            description = description,
-                                            totalFloors = totalFloors.toIntOrNull(),
-                                            unitFloor = unitFloor.toIntOrNull(),
-                                            hasParking = if (showOptionalAmenities) hasParking else true,
-                                            cabinetType = if (showOptionalAmenities) cabinetType else "MDF",
-                                            otherAmenities = allAmenities,
-                                            financialMode = financialMode,
-                                            depositAmount = depVal,
-                                            rentAmount = rentVal,
-                                            imagesString = selectedImageUrlList.joinToString(","),
-                                            isCollaborative = isCollaborative,
-                                            ownerName = ownerName,
-                                            ownerPhone = ownerPhone,
-                                            lastContactDate = property?.lastContactDate ?: System.currentTimeMillis(),
-                                            followUpStatus = "",
-                                            status = property?.status ?: "ACTIVE",
-                                            isSpecial = property?.isSpecial ?: false,
-                                            createdAt = property?.createdAt ?: System.currentTimeMillis()
-                                        )
-
-                                        onSave(finalProperty)
-                                    }
-                                }
-                            },
+                    // Right side button: Step Prev ("گام قبل") (First element in RTL is on the Right)
+                    if (currentStep > 1) {
+                        OutlinedButton(
+                            onClick = { currentStep-- },
                             modifier = Modifier
-                                .weight(9f)
-                                .height(42.dp)
-                                .testTag("save_property_button"),
-                            shape = RoundedCornerShape(12.dp)
+                                .weight(1f)
+                                .height(46.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                         ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "گام قبل",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+
+                    // Left side button: Step Next ("گام بعد" / "ذخیره فایل") (Second element in RTL is on the Left)
+                    Button(
+                        onClick = {
+                            // Validate each step before moving forward
+                            if (currentStep == 1) {
+                                if (region.trim().isEmpty() || area.trim().isEmpty() || bedrooms.trim().isEmpty() || code.trim().isEmpty()) {
+                                    Toast.makeText(context, "لطفاً موارد ستاره‌دار از جمله کد فایل را تکمیل کنید.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+
+                                val doubleArea = area.toDoubleOrNull()
+                                val intBedrooms = bedrooms.toIntOrNull()
+                                if (doubleArea == null || intBedrooms == null) {
+                                    Toast.makeText(context, "متراژ و تعداد خواب باید عدد معتبر باشند.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+
+                                // Duplicate code check (Requirement 6)
+                                val isDuplicate = rawProperties.any { it.code == code.trim() && it.id != (property?.id ?: 0L) }
+                                if (isDuplicate) {
+                                    Toast.makeText(context, "کد فایل تکراری است. لطفاً کد دیگری وارد کنید.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+
+                                currentStep++
+                            } else if (currentStep == 2) {
+                                currentStep++
+                            } else if (currentStep == 3) {
+                                val depVal = depositAmount.toDoubleOrNull()
+                                val rentVal = rentAmount.toDoubleOrNull()
+
+                                if (financialMode == "RENT_AND_MORTGAGE" && depVal == null && rentVal == null) {
+                                    Toast.makeText(context, "لطفاً حداقل یکی از مقادیر رهن یا اجاره را وارد کنید.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                if (financialMode == "FULL_MORTGAGE" && depVal == null) {
+                                    Toast.makeText(context, "لطفاً مقدار رهن کامل را وارد کنید.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                if (financialMode == "FULL_RENT" && rentVal == null) {
+                                    Toast.makeText(context, "لطفاً مقدار اجاره کامل را وارد کنید.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                currentStep++
+                            } else {
+                                // Save execution on final step
+                                val doubleArea = area.toDoubleOrNull() ?: 0.0
+                                val intBedrooms = bedrooms.toIntOrNull() ?: 0
+                                val depVal = depositAmount.toDoubleOrNull()
+                                val rentVal = rentAmount.toDoubleOrNull()
+
+                                // Combine selected amenities and custom amenities if shown
+                                val allAmenities = if (showOptionalAmenities) {
+                                    (selectedAmenitiesList + customAmenitiesText.split(",")
+                                        .map { it.trim() }
+                                        .filter { it.isNotEmpty() }).joinToString(", ")
+                                } else {
+                                    ""
+                                }
+
+                                val finalProperty = Property(
+                                    id = property?.id ?: 0L,
+                                    code = code.trim(), // Use the manually entered/edited code
+                                    type = type,
+                                    region = region,
+                                    area = doubleArea,
+                                    bedrooms = intBedrooms,
+                                    description = description,
+                                    totalFloors = totalFloors.toIntOrNull(),
+                                    unitFloor = unitFloor.toIntOrNull(),
+                                    hasParking = if (showOptionalAmenities) hasParking else true,
+                                    cabinetType = if (showOptionalAmenities) cabinetType else "MDF",
+                                    otherAmenities = allAmenities,
+                                    financialMode = financialMode,
+                                    depositAmount = depVal,
+                                    rentAmount = rentVal,
+                                    imagesString = selectedImageUrlList.joinToString(","),
+                                    isCollaborative = isCollaborative,
+                                    ownerName = ownerName,
+                                    ownerPhone = ownerPhone,
+                                    lastContactDate = property?.lastContactDate ?: System.currentTimeMillis(),
+                                    followUpStatus = "",
+                                    status = property?.status ?: "ACTIVE",
+                                    isSpecial = property?.isSpecial ?: false,
+                                    createdAt = property?.createdAt ?: System.currentTimeMillis()
+                                )
+
+                                onSave(finalProperty)
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                            .testTag("save_property_button"),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowLeft,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (currentStep < 4) "ادامه و گام بعدی" else "ذخیره فایل",
+                                text = if (currentStep < 4) "گام بعد" else "ذخیره فایل",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             )
                         }
-                        if (currentStep == 1) {
-                            Spacer(modifier = Modifier.weight(0.5f))
-                        }
                     }
+                }
                 }
             }
         }
-}
+    }
 
 @Composable
 fun BackupRestoreDialog(
@@ -2631,6 +3116,8 @@ fun BackupRestoreDialog(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("melkup_prefs", android.content.Context.MODE_PRIVATE) }
     var agencyName by remember { mutableStateOf(prefs.getString("agency_name", "") ?: "") }
+    var customHeader by remember { mutableStateOf(prefs.getString("custom_header", "") ?: "") }
+    var customFooter by remember { mutableStateOf(prefs.getString("custom_footer", "") ?: "") }
     var importText by remember { mutableStateOf("") }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -2669,6 +3156,32 @@ fun BackupRestoreDialog(
                     text = "در صورت ثبت، نام بنگاه شما به‌طور خودکار در پرامپت‌های تولیدی درج می‌شود.",
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+
+                Divider()
+
+                Text("سربرگ و ته برگ سفارشی متن کپی شده:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                OutlinedTextField(
+                    value = customHeader,
+                    onValueChange = {
+                        customHeader = it
+                        prefs.edit().putString("custom_header", it).apply()
+                    },
+                    label = { Text("سربرگ سفارشی (بالای متن کپی)") },
+                    placeholder = { Text("مثال: ⚜️ گروه مشاورین املاک رویال ⚜️", fontSize = 11.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+                OutlinedTextField(
+                    value = customFooter,
+                    onValueChange = {
+                        customFooter = it
+                        prefs.edit().putString("custom_footer", it).apply()
+                    },
+                    label = { Text("ته برگ سفارشی (پایین متن کپی)") },
+                    placeholder = { Text("مثال: 📞 تلفن تماس: ۰۹۱۲۳۴۵۶۷۸۹", fontSize = 11.sp) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
                 )
 
                 Divider()
@@ -2742,6 +3255,122 @@ fun BackupRestoreDialog(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                     )
+                }
+            }
+        }
+    }
+}
+
+fun shareBackupFile(context: Context, fileName: String, fileContent: String) {
+    try {
+        val cleanName = if (fileName.endsWith(".json")) fileName else "$fileName.json"
+        val cacheDir = context.cacheDir
+        val file = java.io.File(cacheDir, cleanName)
+        
+        java.io.FileOutputStream(file).use { os ->
+            os.write(fileContent.toByteArray(Charsets.UTF_8))
+        }
+        
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+        
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/json"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        
+        context.startActivity(Intent.createChooser(intent, "ارسال فایل پشتیبان"))
+    } catch (e: Exception) {
+        Toast.makeText(context, "خطا در اشتراک‌گذاری فایل: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+    }
+}
+
+@Composable
+fun ShareFileNameDialog(
+    properties: List<Property>,
+    onDismiss: () -> Unit,
+    onShareComplete: () -> Unit
+) {
+    val context = LocalContext.current
+    val simpleDate = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+    val defaultName = "melkup_export_${simpleDate}.json"
+    var fileName by remember { mutableStateOf(defaultName) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = "📤 ارسال فایل پشتیبان",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Right
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(
+                    text = "شما در حال اشتراک‌گذاری ${properties.size} فایل ملکی به صورت فایل پشتیبان آفلاین هستید. گیرنده می‌تواند این فایل را در برنامه خود بازیابی کند.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Right
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                OutlinedTextField(
+                    value = fileName,
+                    onValueChange = { fileName = it },
+                    label = { Text("نام فایل") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("انصراف", color = MaterialTheme.colorScheme.error)
+                    }
+                    
+                    Button(
+                        onClick = {
+                            if (fileName.trim().isEmpty()) {
+                                Toast.makeText(context, "لطفاً نام فایل را وارد کنید", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            val json = com.example.util.BackupHelper.exportBackup(properties)
+                            shareBackupFile(context, fileName.trim(), json)
+                            onShareComplete()
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Share, null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("اشتراک‌گذاری")
+                    }
                 }
             }
         }
@@ -3057,7 +3686,7 @@ fun generatePromptText(
     detailsBuilder.append("قیمت: $priceText\n")
     detailsBuilder.append("کد فایل: ${property.code}\n\n")
 
-    val instructions = when (templateName) {
+    var instructions = when (templateName) {
         "استوری رسمی" -> "لطفاً یک استوری رسمی و حرفه‌ای برای معرفی این ملک تولید کن. متن کوتاه، مؤدبانه و برای معرفی رسمی ملک باشد. در پایان کد فایل را نمایش بده."
         "استوری فروش فوری" -> "لطفاً یک استوری با لحن فوری، جذاب و ترغیب‌کننده برای جذب مشتری سریع بنویس. متن حس فرصت طلایی و فوری بودن را القا کند. در پایان کد فایل را نمایش بده."
         "استوری لوکس" -> "لطفاً یک استوری با لحن مجلل، لوکس و توصیفات شیک ویژه معرفی املاک گران‌قیمت تولید کن. در پایان کد فایل را نمایش بده."
@@ -3069,6 +3698,10 @@ fun generatePromptText(
         "متن آگهی حرفه‌ای" -> "لطفاً یک متن کامل، توصیفی، اصولی و حرفه‌ای برای درج در آگهی‌های پلتفرم‌های ملکی بنویس. در پایان کد فایل را نمایش بده."
         "متن خلاقانه و جذاب" -> "لطفاً یک متن تبلیغاتی فوق‌العاده خلاقانه با رویکرد بازاریابی نوین، داستانی یا غافلگیرکننده بنویس که حداکثر مخاطب را جذب کند. در پایان کد فایل را نمایش بده."
         else -> "لطفاً یک متن آگهی تبلیغاتی بنویس. در پایان کد فایل را نمایش بده."
+    }
+
+    if (templateName.contains("استوری")) {
+        instructions += " همچنین ابعاد تصویر این استوری باید 1080*1920 باشد؛ لطفاً یک تصویر مناسب و جذاب برای این استوری بساز."
     }
 
     detailsBuilder.append("$instructions\n")
@@ -3554,11 +4187,16 @@ fun StepLine(isActive: Boolean) {
 @Composable
 fun SettingsAndBackupScreen(
     onExport: () -> Unit,
-    onImport: (String) -> Unit
+    onImport: (String) -> Unit,
+    licenseStatus: LicenseStatus,
+    onLicenseChanged: () -> Unit,
+    propertiesCount: Int
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("melkup_prefs", android.content.Context.MODE_PRIVATE) }
     var agencyName by remember { mutableStateOf(prefs.getString("agency_name", "") ?: "") }
+    var customHeader by remember { mutableStateOf(prefs.getString("custom_header", "") ?: "") }
+    var customFooter by remember { mutableStateOf(prefs.getString("custom_footer", "") ?: "") }
     var copyFormat by remember { mutableStateOf(prefs.getString("copy_format", "standard") ?: "standard") }
     var importText by remember { mutableStateOf("") }
 
@@ -3603,6 +4241,228 @@ fun SettingsAndBackupScreen(
 
         Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
 
+        // --- ACTIVATION SECTION ---
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (licenseStatus.isValid) MaterialTheme.colorScheme.primary.copy(alpha = 0.03f)
+                else MaterialTheme.colorScheme.error.copy(alpha = 0.03f)
+            ),
+            border = BorderStroke(
+                1.dp,
+                if (licenseStatus.isValid) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                else MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = if (licenseStatus.isValid) Icons.Default.VerifiedUser else Icons.Default.GppBad,
+                        contentDescription = null,
+                        tint = if (licenseStatus.isValid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = "فعال‌سازی و وضعیت لایسنس",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = if (licenseStatus.isValid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    )
+                }
+
+                if (licenseStatus.isValid) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "وضعیت برنامه:",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "فعال (نسخه ویژه) ✅",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "اعتبار لایسنس:",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            text = if (licenseStatus.isLifetime) "مادام‌العمر ♾️" else "${licenseStatus.remainingDays} روز باقی‌مانده ⏳",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "وضعیت برنامه:",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "نسخه محدود (غیرفعال) ⚠️",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "تعداد فایل‌های ملکی:",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            text = "$propertiesCount از ۳ فایل مجاز",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (propertiesCount >= 3) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+
+                // Copy User Code block
+                Text(
+                    text = "کد کاربری شما (کد دستگاه):",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                val androidId = LicenseManager.getAndroidId(context)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            PersianUtils.copyToClipboard(context, androidId, "کد کاربری")
+                            Toast.makeText(context, "کد کاربری کپی شد", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "کپی",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Text(
+                        text = androidId,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // Activation input field
+                var activationInputKey by remember { mutableStateOf("") }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = activationInputKey,
+                        onValueChange = { activationInputKey = it },
+                        placeholder = { Text("کد فعال‌سازی (لایسنس)", fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    )
+                    Button(
+                        onClick = {
+                            if (activationInputKey.isNotEmpty()) {
+                                if (LicenseManager.isValidLicense(activationInputKey, androidId)) {
+                                    prefs.edit()
+                                        .putString("license_key", activationInputKey.trim().uppercase())
+                                        .putLong("license_activation_time", System.currentTimeMillis())
+                                        .apply()
+                                    onLicenseChanged()
+                                    activationInputKey = ""
+                                    Toast.makeText(context, "برنامه با موفقیت فعال شد! 🎉", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "کد فعال‌سازی لایسنس نامعتبر است!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        enabled = activationInputKey.trim().isNotEmpty(),
+                        modifier = Modifier.height(50.dp),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("ثبت")
+                    }
+                }
+            }
+        }
+
+        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+
         Text("تنظیمات آژانس املاک:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
         OutlinedTextField(
             value = agencyName,
@@ -3619,6 +4479,32 @@ fun SettingsAndBackupScreen(
             text = "در صورت ثبت، نام بنگاه شما به‌طور خودکار در پرامپت‌های تولیدی درج می‌شود.",
             fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+
+        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+
+        Text("سربرگ و ته برگ سفارشی متن کپی شده:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        OutlinedTextField(
+            value = customHeader,
+            onValueChange = {
+                customHeader = it
+                prefs.edit().putString("custom_header", it).apply()
+            },
+            label = { Text("سربرگ سفارشی (بالای متن کپی)") },
+            placeholder = { Text("مثال: ⚜️ گروه مشاورین املاک رویال ⚜️", fontSize = 11.sp) },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp)
+        )
+        OutlinedTextField(
+            value = customFooter,
+            onValueChange = {
+                customFooter = it
+                prefs.edit().putString("custom_footer", it).apply()
+            },
+            label = { Text("ته برگ سفارشی (پایین متن کپی)") },
+            placeholder = { Text("مثال: 📞 تلفن تماس: ۰۹۱۲۳۴۵۶۷۸۹", fontSize = 11.sp) },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp)
         )
 
         Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
@@ -3857,4 +4743,280 @@ fun FloatingNavItem(
         }
     }
 }
+
+@Composable
+fun CompactPropertyItem(
+    property: Property,
+    isSelected: Boolean,
+    onCardClick: () -> Unit,
+    onSelectionToggle: () -> Unit,
+    isSelectionMode: Boolean,
+    onDelete: (() -> Unit)? = null
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            else MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        border = BorderStroke(
+            width = if (isSelected) 1.5.dp else 1.dp,
+            color = if (isSelected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 5.dp)
+            .clickable { onCardClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+        ) {
+            // Subtle left vertical indicator line to make it a distinct box!
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .fillMaxHeight()
+                    .background(
+                        if (property.isSpecial) AccentGold else MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                    )
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (isSelectionMode) {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = { onSelectionToggle() },
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    
+                    // Code tag
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = property.code,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        )
+                    }
+
+                    // Inline property info written together on a single line side-by-side (NO EMOJIS)
+                    val priceText = when (property.financialMode) {
+                        "RENT_AND_MORTGAGE" -> "${PersianUtils.formatPrice(property.depositAmount)} رهن / ${PersianUtils.formatPrice(property.rentAmount)} اجاره"
+                        "FULL_MORTGAGE" -> "${PersianUtils.formatPrice(property.depositAmount)} رهن کامل"
+                        "FULL_RENT" -> "${PersianUtils.formatPrice(property.rentAmount)} اجاره کامل"
+                        else -> "توافقی"
+                    }
+                    
+                    Text(
+                        text = "${property.type} | ${property.region} | ${PersianUtils.formatArea(property.area)} متر | ${PersianUtils.formatNumber(property.bedrooms)} خواب | $priceText",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (property.isSpecial) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = "ویژه",
+                            tint = Color(0xFFFFB300),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    if (onDelete != null && !isSelectionMode) {
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "حذف",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowLeft,
+                        contentDescription = "جزئیات",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LicenseLockScreen(
+    androidId: String,
+    onActivate: (String) -> Unit
+) {
+    val context = LocalContext.current
+    var inputKey by remember { mutableStateOf("") }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Large Gold Lock icon
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+                
+                Text(
+                    text = "دسترسی به پرامپت استوری محدود است",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+                
+                Text(
+                    text = "قابلیت تولید خودکار استوری و پرامپت‌های تبلیغاتی با هوش مصنوعی مخصوص نسخه ویژه (لایسنس‌دار) است. لطفاً برای فعال‌سازی کامل برنامه، لایسنس خود را وارد کنید.",
+                    fontSize = 12.sp,
+                    lineHeight = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                
+                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                
+                // Copy User Code Section
+                Text(
+                    text = "کد کاربری شما (کد دستگاه):",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            PersianUtils.copyToClipboard(context, androidId, "کد کاربری")
+                            Toast.makeText(context, "کد کاربری کپی شد", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "کپی",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Text(
+                        text = androidId,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Enter Activation Key
+                OutlinedTextField(
+                    value = inputKey,
+                    onValueChange = { inputKey = it },
+                    label = { Text("کد فعال‌سازی (لایسنس)") },
+                    placeholder = { Text("مثال: ZZZ1-ABCD") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+                
+                Button(
+                    onClick = { if (inputKey.isNotEmpty()) onActivate(inputKey) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    enabled = inputKey.isNotEmpty()
+                ) {
+                    Icon(imageVector = Icons.Default.Check, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("فعال‌سازی برنامه", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
 

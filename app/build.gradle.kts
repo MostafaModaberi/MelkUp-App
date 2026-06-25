@@ -1,3 +1,7 @@
+import java.net.URI
+import java.net.URL
+import java.io.File
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -119,3 +123,30 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+tasks.register("downloadVazirmatn") {
+  doLast {
+    val fontDir = File("app/src/main/res/font")
+    if (!fontDir.exists()) {
+      fontDir.mkdirs()
+    }
+    val regularFile = File(fontDir, "vazirmatn_regular.ttf")
+    if (!regularFile.exists()) {
+      println("Downloading Vazirmatn-Regular...")
+      val bytes = URI("https://raw.githubusercontent.com/rastikerdar/vazirmatn/master/fonts/ttf/Vazirmatn-Regular.ttf").toURL().readBytes()
+      regularFile.writeBytes(bytes)
+    }
+    val boldFile = File(fontDir, "vazirmatn_bold.ttf")
+    if (!boldFile.exists()) {
+      println("Downloading Vazirmatn-Bold...")
+      val bytes = URI("https://raw.githubusercontent.com/rastikerdar/vazirmatn/master/fonts/ttf/Vazirmatn-Bold.ttf").toURL().readBytes()
+      boldFile.writeBytes(bytes)
+    }
+  }
+}
+
+tasks.named("preBuild") {
+  dependsOn("downloadVazirmatn")
+}
+
+

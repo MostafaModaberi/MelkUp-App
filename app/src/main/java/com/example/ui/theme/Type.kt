@@ -1,14 +1,18 @@
 package com.example.ui.theme
 
-import android.graphics.Typeface
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.example.R
 
-// Vazirmatn font family with fallback to system SansSerif
-val Vazirmatn = FontFamily(Typeface.create("vazirmatn", Typeface.NORMAL))
+// Vazirmatn font family loaded from local resources (ttf files)
+val Vazirmatn = FontFamily(
+    Font(R.font.vazirmatn_regular, FontWeight.Normal),
+    Font(R.font.vazirmatn_bold, FontWeight.Bold)
+)
 
 // optimized typography for Persian text rendering
 val Typography = Typography(

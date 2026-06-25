@@ -55,7 +55,7 @@ object PersianUtils {
 
     fun getPersianDate(timestamp: Long?): String {
         if (timestamp == null) return "ثبت نشده"
-        val cal = Calendar.getInstance().apply { timeInMillis = timestamp }
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Tehran")).apply { timeInMillis = timestamp }
         val gYear = cal.get(Calendar.YEAR)
         val gMonth = cal.get(Calendar.MONTH) + 1
         val gDay = cal.get(Calendar.DAY_OF_MONTH)
@@ -126,156 +126,155 @@ object PersianUtils {
     }
 
     // Single Property Telegram Output
-    fun generateSingleTelegramOutput(p: Property, format: String = "standard"): String {
-        return generateSingleTelegramOutput(null, p, format)
+    fun generatePropertySingleLineText(context: Context?, p: Property): String {
+        val parts = mutableListOf<String>()
+        
+        // 1. Unique code (Must be at the very beginning!)
+        if (p.code.isNotEmpty()) {
+            parts.add(p.code)
+        }
+        
+        // 2. Type
+        parts.add(p.type)
+        
+        // 3. Region
+        if (p.region.isNotEmpty()) {
+            parts.add("📍 ${p.region}")
+        }
+        
+        // 4. Area
+        parts.add("📐 ${formatArea(p.area)} متر")
+        
+        // 5. Bedrooms
+        parts.add("🛏 ${formatNumber(p.bedrooms)} خواب")
+        
+        // 6. Floors (if applicable)
+        if (p.type == "آپارتمان") {
+            val floorParts = mutableListOf<String>()
+            if (p.totalFloors != null && p.totalFloors > 0) {
+                floorParts.add("کل طبقات: ${formatNumber(p.totalFloors)}")
+            }
+            if (p.unitFloor != null) {
+                floorParts.add("طبقه: ${formatNumber(p.unitFloor)}")
+            }
+            if (floorParts.isNotEmpty()) {
+                parts.add(floorParts.joinToString("، "))
+            }
+        }
+        
+        // 7. Parking
+        parts.add("🚗 پارکینگ: ${if (p.hasParking) "دارد" else "ندارد"}")
+        
+        // 8. Cabinet type
+        if (p.cabinetType.isNotEmpty()) {
+            parts.add("کابینت: ${p.cabinetType}")
+        }
+        
+        // 9. Other amenities
+        if (p.otherAmenities.isNotEmpty()) {
+            parts.add("✨ امکانات: ${p.otherAmenities}")
+        }
+        
+        // 10. Financial Mode & Price
+        val priceText = when (p.financialMode) {
+            "RENT_AND_MORTGAGE" -> "رهن: ${formatPrice(p.depositAmount)} / اجاره: ${formatPrice(p.rentAmount)}"
+            "FULL_MORTGAGE" -> "رهن کامل: ${formatPrice(p.depositAmount)}"
+            "FULL_RENT" -> "اجاره کامل: ${formatPrice(p.rentAmount)}"
+            else -> "توافقی"
+        }
+        parts.add("💰 $priceText")
+        
+        // 11. Description
+        if (p.description.trim().isNotEmpty()) {
+            parts.add("📝 ${p.description.trim()}")
+        }
+        
+        return parts.joinToString(" - ")
+    }
+
+    fun generatePropertyCompactSummaryText(p: Property): String {
+        val parts = mutableListOf<String>()
+        if (p.code.isNotEmpty()) {
+            parts.add(p.code)
+        }
+        parts.add(p.type)
+        if (p.region.isNotEmpty()) {
+            parts.add(p.region)
+        }
+        parts.add("${formatArea(p.area)} متر")
+        parts.add("${formatNumber(p.bedrooms)} خواب")
+        
+        val priceText = when (p.financialMode) {
+            "RENT_AND_MORTGAGE" -> "${formatPrice(p.depositAmount)} رهن / ${formatPrice(p.rentAmount)} اجاره"
+            "FULL_MORTGAGE" -> "${formatPrice(p.depositAmount)} رهن کامل"
+            "FULL_RENT" -> "${formatPrice(p.rentAmount)} اجاره کامل"
+            else -> "توافقی"
+        }
+        parts.add(priceText)
+        
+        if (p.description.trim().isNotEmpty()) {
+            parts.add(p.description.trim())
+        }
+        
+        return parts.joinToString(" | ")
+    }
+
+    fun buildCopyWithHeaderFooter(context: Context?, body: String): String {
+        val prefs = context?.getSharedPreferences("melkup_prefs", Context.MODE_PRIVATE)
+        val header = prefs?.getString("custom_header", "") ?: ""
+        val footer = prefs?.getString("custom_footer", "") ?: ""
+        
+        val sb = StringBuilder()
+        if (header.trim().isEmpty() && footer.trim().isEmpty()) {
+            sb.append("اپلیکیشن ملکآپ، مدیریت هوشمند فایلها\n\n")
+            sb.append(body)
+        } else {
+            if (header.trim().isNotEmpty()) {
+                sb.append(header.trim()).append("\n\n")
+            }
+            sb.append(body)
+            if (footer.trim().isNotEmpty()) {
+                sb.append("\n\n").append(footer.trim())
+            }
+        }
+        return sb.toString()
+    }
+
+    fun generateSingleTelegramOutput(p: Property): String {
+        return generateSingleTelegramOutput(null, p, "standard")
     }
 
     fun generateSingleTelegramOutput(context: Context?, p: Property, format: String = "standard"): String {
-        if (format == "compact") {
-            val parts = mutableListOf<String>()
-            val prefs = context?.getSharedPreferences("melkup_prefs", Context.MODE_PRIVATE)
-            
-            val showType = prefs?.getBoolean("compact_show_type", true) ?: true
-            val showRegion = prefs?.getBoolean("compact_show_region", true) ?: true
-            val showArea = prefs?.getBoolean("compact_show_area", true) ?: true
-            val showBedrooms = prefs?.getBoolean("compact_show_bedrooms", true) ?: true
-            val showPrice = prefs?.getBoolean("compact_show_price", true) ?: true
-            val showCode = prefs?.getBoolean("compact_show_code", true) ?: true
-
-            if (showType) {
-                val typeIcon = when (p.type) {
-                    "آپارتمان" -> "🏠"
-                    "ویلایی" -> "🏡"
-                    "باغ ویلا" -> "🌳"
-                    else -> "🏢"
-                }
-                parts.add("$typeIcon ${p.type}")
-            }
-            
-            if (showRegion) {
-                parts.add(p.region)
-            }
-            
-            if (showArea) {
-                parts.add("${formatArea(p.area)} متر")
-            }
-            
-            if (showBedrooms) {
-                parts.add("${formatNumber(p.bedrooms)} خواب")
-            }
-            
-            if (showPrice) {
-                val priceText = when (p.financialMode) {
-                    "RENT_AND_MORTGAGE" -> "${formatPrice(p.depositAmount)} رهن / ${formatPrice(p.rentAmount)} اجاره"
-                    "FULL_MORTGAGE" -> "${formatPrice(p.depositAmount)} رهن کامل"
-                    "FULL_RENT" -> "${formatPrice(p.rentAmount)} اجاره کامل"
-                    else -> ""
-                }
-                if (priceText.isNotEmpty()) {
-                    parts.add(priceText)
-                }
-            }
-            
-            val baseText = parts.joinToString(" - ")
-            
-            return if (showCode) {
-                if (baseText.isNotEmpty()) {
-                    "$baseText [کد: ${p.code}]"
-                } else {
-                    "[کد: ${p.code}]"
-                }
-            } else {
-                baseText
-            }
+        val baseText = if (format == "compact") {
+            generatePropertyCompactSummaryText(p)
+        } else {
+            generatePropertySingleLineText(context, p)
         }
-
-        val sb = StringBuilder()
-        val isPlain = format == "plain"
-        
-        val typeIcon = if (isPlain) "" else when (p.type) {
-            "آپارتمان" -> "🏠 "
-            "ویلایی" -> "🏡 "
-            "باغ ویلا" -> "🌳 "
-            else -> "🏢 "
-        }
-        
-        sb.append("$typeIcon${p.type}\n")
-        sb.append(if (isPlain) "منطقه: " else "📍 منطقه: ").append("${p.region}\n")
-        sb.append(if (isPlain) "متراژ: " else "📐 متراژ: ").append("${formatArea(p.area)} متر\n")
-        sb.append(if (isPlain) "تعداد خواب: " else "🛏 تعداد خواب: ").append("${formatNumber(p.bedrooms)} خواب\n")
-        
-        if (p.type == "آپارتمان") {
-            if (p.totalFloors != null) sb.append(if (isPlain) "تعداد طبقات: " else "🏢 تعداد طبقات: ").append("${formatNumber(p.totalFloors)} طبقه\n")
-            if (p.unitFloor != null) sb.append(if (isPlain) "طبقه واحد: " else "🚪 طبقه واحد: ").append("${formatNumber(p.unitFloor)}\n")
-        }
-        
-        val parkingText = if (p.hasParking) "دارد" else "ندارد"
-        sb.append(if (isPlain) "پارکینگ: " else "🚗 پارکینگ: ").append("$parkingText\n")
-        
-        if (p.cabinetType.isNotEmpty()) {
-            sb.append(if (isPlain) "کابینت: " else "🧰 کابینت: ").append("${p.cabinetType}\n")
-        }
-        
-        if (p.otherAmenities.isNotEmpty()) {
-            sb.append(if (isPlain) "امکانات: " else "✨ امکانات: ").append("${p.otherAmenities}\n")
-        }
-        
-        sb.append("\n💰 ")
-        when (p.financialMode) {
-            "RENT_AND_MORTGAGE" -> {
-                sb.append("رهن: ${formatPrice(p.depositAmount)} تومان\n")
-                sb.append(if (isPlain) "اجاره: " else "💵 اجاره: ").append("${formatPrice(p.rentAmount)} تومان\n")
-            }
-            "FULL_MORTGAGE" -> {
-                sb.append("رهن کامل: ${formatPrice(p.depositAmount)} تومان\n")
-            }
-            "FULL_RENT" -> {
-                sb.append(if (isPlain) "اجاره کامل: " else "اجاره کامل: ").append("${formatPrice(p.rentAmount)} تومان\n")
-            }
-        }
-        
-        if (p.description.trim().isNotEmpty()) {
-            sb.append("\n").append(if (isPlain) "توضیحات: " else "📝 توضیحات: ").append("${p.description}\n")
-        }
-        
-        sb.append("\n").append(if (isPlain) "کد فایل: " else "📋 کد فایل: ").append(p.code)
-        
-        return sb.toString()
+        return buildCopyWithHeaderFooter(context, baseText)
     }
 
-    // Group Summary Output (One line per property)
+    // Group Summary Output (One line per property with line spacing and custom header/footer)
     fun generateGroupSummaryOutput(properties: List<Property>): String {
-        val sb = StringBuilder()
-        sb.append("📋 لیست فایلهای ملکی MelkUp:\n\n")
-        properties.forEachIndexed { index, p ->
-            val typeIcon = when (p.type) {
-                "آپارتمان" -> "🏠"
-                "ویلایی" -> "🏡"
-                "باغ ویلا" -> "🌳"
-                else -> "🏢"
-            }
-            val priceText = when (p.financialMode) {
-                "RENT_AND_MORTGAGE" -> "${formatPrice(p.depositAmount)} رهن / ${formatPrice(p.rentAmount)} اجاره"
-                "FULL_MORTGAGE" -> "${formatPrice(p.depositAmount)} رهن کامل"
-                "FULL_RENT" -> "${formatPrice(p.rentAmount)} اجاره کامل"
-                else -> ""
-            }
-            val line = "${index + 1}. $typeIcon ${p.type} - ${p.region} - ${formatArea(p.area)} متر - ${formatNumber(p.bedrooms)} خواب - $priceText [کد: ${p.code}]"
-            sb.append(line).append("\n")
-        }
-        return sb.toString()
+        return generateGroupSummaryOutput(null, properties)
     }
 
-    // Group Full Output
-    fun generateGroupFullOutput(properties: List<Property>, format: String = "standard", context: Context? = null): String {
-        val sb = StringBuilder()
-        sb.append("🔥 لیست کامل فایلهای ملکی منتخب MelkUp:\n")
-        sb.append("=========================================\n\n")
-        properties.forEach { p ->
-            sb.append(generateSingleTelegramOutput(context, p, format))
-            sb.append("\n\n-----------------------------------------\n\n")
+    fun generateGroupSummaryOutput(context: Context?, properties: List<Property>): String {
+        val body = properties.joinToString("\n\n") { p ->
+            generatePropertyCompactSummaryText(p)
         }
-        return sb.toString()
+        return buildCopyWithHeaderFooter(context, body)
+    }
+
+    // Group Full Output (Using single-line dash-separated format as default)
+    fun generateGroupFullOutput(properties: List<Property>, format: String = "standard", context: Context? = null): String {
+        val body = properties.joinToString("\n\n") { p ->
+            if (format == "compact") {
+                generatePropertyCompactSummaryText(p)
+            } else {
+                generatePropertySingleLineText(context, p)
+            }
+        }
+        return buildCopyWithHeaderFooter(context, body)
     }
 
     // Copy to clipboard helper (Robust with Handler to ensure thread-safety on all Android versions)
