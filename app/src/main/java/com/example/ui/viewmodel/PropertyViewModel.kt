@@ -106,6 +106,7 @@ class PropertyViewModel(application: Application) : AndroidViewModel(application
             "AREA" -> if (asc) list.sortedBy { it.area } else list.sortedByDescending { it.area }
             "BEDROOMS" -> if (asc) list.sortedBy { it.bedrooms } else list.sortedByDescending { it.bedrooms }
             "REGION" -> if (asc) list.sortedBy { it.region } else list.sortedByDescending { it.region }
+            "CODE" -> if (asc) list.sortedBy { it.code } else list.sortedByDescending { it.code }
             else -> if (asc) list.sortedBy { it.createdAt } else list.sortedByDescending { it.createdAt } // DATE
         }
 
@@ -187,8 +188,8 @@ class PropertyViewModel(application: Application) : AndroidViewModel(application
     }
 
     // Backup & Restore
-    fun exportBackupJson(): String {
-        return BackupHelper.exportBackup(allProperties.value)
+    fun exportBackupJson(properties: List<Property> = allProperties.value): String {
+        return BackupHelper.exportBackup(properties)
     }
 
     fun importBackupJson(json: String, onResult: (Boolean, Int) -> Unit) {

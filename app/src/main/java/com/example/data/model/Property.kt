@@ -20,8 +20,10 @@ data class Property(
     val cabinetType: String = "", // جنس کابینت (MDF, فلزی, ...)
     val otherAmenities: String = "", // سایر امکانات
     val financialMode: String, // RENT_AND_MORTGAGE, FULL_MORTGAGE, FULL_RENT
-    val depositAmount: Double? = null, // رهن
-    val rentAmount: Double? = null, // اجاره
+    val depositAmount: Double? = null, // رهن (در رهن و اجاره)
+    val rentAmount: Double? = null, // اجاره (در رهن و اجاره)
+    val fullDepositAmount: Double? = null, // رهن کامل
+    val fullRentAmount: Double? = null, // اجاره کامل
     val imagesString: String = "", // Comma-separated list of local image URIs or drawables
     val isCollaborative: Boolean = false, // وضعیت همکاری (همکاری دارد/ندارد)
     val ownerName: String = "", // نام مالک

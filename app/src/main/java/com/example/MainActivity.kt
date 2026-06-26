@@ -29,12 +29,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -126,17 +128,17 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                         // MU Badge logo
                         Box(
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(56.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(Color.White)
-                                .border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)),
+                                .border(1.5.dp, Color(0xFF7C3AED), RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = "MU",
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Black,
-                                fontSize = 16.sp
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_logo_minimal),
+                                contentDescription = "لوگو ملک آپ",
+                                tint = Color.Unspecified,
+                                modifier = Modifier.size(48.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
@@ -388,10 +390,11 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                             // Sort Fields Row
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 val sortFields = listOf(
                                     "DATE" to "تاریخ ثبت",
+                                    "CODE" to "کد یکتا",
                                     "AREA" to "متراژ",
                                     "BEDROOMS" to "خواب",
                                     "REGION" to "منطقه"
@@ -410,12 +413,12 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                                                 shape = RoundedCornerShape(6.dp)
                                             )
                                             .clickable { viewModel.sortBy.value = field }
-                                            .padding(horizontal = 4.dp),
+                                            .padding(horizontal = 2.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
                                             text = label,
-                                            fontSize = 10.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
                                             color = if (isSel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                                         )
@@ -637,6 +640,81 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                         )
                     }
 
+                    // --- QUICK SORT PANEL FOR ALL FILES ---
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Ascending/Descending Toggle
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                                .clickable { viewModel.sortAscending.value = !sortAscending }
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (sortAscending) "صعودی" else "نزولی",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        // Horizontal list of fields
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val sortFields = listOf(
+                                "DATE" to "تاریخ ثبت",
+                                "CODE" to "کد یکتا",
+                                "AREA" to "متراژ",
+                                "BEDROOMS" to "خواب",
+                                "REGION" to "منطقه"
+                            )
+                            sortFields.forEach { (field, label) ->
+                                val isSel = sortBy == field
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(28.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (isSel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSel) Color.Transparent else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
+                                            shape = RoundedCornerShape(6.dp)
+                                        )
+                                        .clickable { viewModel.sortBy.value = field }
+                                        .padding(horizontal = 2.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 10.5.sp,
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
                     // Quick statistics / Export All section
                     Row(
                         modifier = Modifier
@@ -800,16 +878,17 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                         LicenseLockScreen(
                             androidId = LicenseManager.getAndroidId(context),
                             onActivate = { key ->
-                                val androidId = LicenseManager.getAndroidId(context)
-                                if (LicenseManager.isValidLicense(key, androidId)) {
-                                    prefs.edit()
-                                        .putString("license_key", key.trim().uppercase())
-                                        .putLong("license_activation_time", System.currentTimeMillis())
-                                        .apply()
-                                    licenseStatus = LicenseManager.checkLicenseStatus(context)
-                                    Toast.makeText(context, "برنامه با موفقیت فعال شد! 🎉", Toast.LENGTH_LONG).show()
-                                } else {
-                                    Toast.makeText(context, "کد فعال‌سازی نامعتبر است!", Toast.LENGTH_SHORT).show()
+                                when (LicenseManager.registerLicense(context, key)) {
+                                    com.example.util.RegisterResult.Success -> {
+                                        licenseStatus = LicenseManager.checkLicenseStatus(context)
+                                        Toast.makeText(context, "برنامه با موفقیت فعال شد! 🎉", Toast.LENGTH_LONG).show()
+                                    }
+                                    com.example.util.RegisterResult.AlreadyUsed -> {
+                                        Toast.makeText(context, "این کد فعال‌سازی قبلاً استفاده شده است و قابل استفاده مجدد نیست!", Toast.LENGTH_LONG).show()
+                                    }
+                                    com.example.util.RegisterResult.Invalid -> {
+                                        Toast.makeText(context, "کد فعال‌سازی نامعتبر است!", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             }
                         )
@@ -824,8 +903,9 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                 "settings" -> {
                     // --- SETTINGS PAGE ---
                     SettingsAndBackupScreen(
-                        onExport = {
-                            val json = viewModel.exportBackupJson()
+                        properties = rawProperties,
+                        onExport = { selectedList ->
+                            val json = viewModel.exportBackupJson(selectedList)
                             PersianUtils.copyToClipboard(context, json, "MelkUp Backup")
                         },
                         onImport = { importText ->
@@ -924,16 +1004,18 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
             confirmButton = {
                 Button(
                     onClick = {
-                        if (LicenseManager.isValidLicense(dialogKeyInput, androidId)) {
-                            prefs.edit()
-                                .putString("license_key", dialogKeyInput.trim().uppercase())
-                                .putLong("license_activation_time", System.currentTimeMillis())
-                                .apply()
-                            licenseStatus = LicenseManager.checkLicenseStatus(context)
-                            showActivationLockDialog = false
-                            Toast.makeText(context, "برنامه با موفقیت فعال شد! 🎉", Toast.LENGTH_LONG).show()
-                        } else {
-                            Toast.makeText(context, "کد فعال‌سازی نامعتبر است!", Toast.LENGTH_SHORT).show()
+                        when (LicenseManager.registerLicense(context, dialogKeyInput)) {
+                            com.example.util.RegisterResult.Success -> {
+                                licenseStatus = LicenseManager.checkLicenseStatus(context)
+                                showActivationLockDialog = false
+                                Toast.makeText(context, "برنامه با موفقیت فعال شد! 🎉", Toast.LENGTH_LONG).show()
+                            }
+                            com.example.util.RegisterResult.AlreadyUsed -> {
+                                Toast.makeText(context, "این کد فعال‌سازی قبلاً استفاده شده است و قابل استفاده مجدد نیست!", Toast.LENGTH_LONG).show()
+                            }
+                            com.example.util.RegisterResult.Invalid -> {
+                                Toast.makeText(context, "کد فعال‌سازی نامعتبر است!", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     },
                     enabled = dialogKeyInput.trim().isNotEmpty()
@@ -989,9 +1071,10 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
 
     if (showBackupDialog) {
         BackupRestoreDialog(
+            properties = rawProperties,
             onDismiss = { showBackupDialog = false },
-            onExport = {
-                val json = viewModel.exportBackupJson()
+            onExport = { selectedList ->
+                val json = viewModel.exportBackupJson(selectedList)
                 PersianUtils.copyToClipboard(context, json, "MelkUp Backup")
             },
             onImport = { json ->
@@ -1303,21 +1386,22 @@ fun SearchAndFilterDialog(
                 Text("۳. مرتب‌سازی بر اساس:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 val sortOptions = listOf(
                     "DATE" to "تاریخ ثبت",
-                    "AREA" to "متراژ ملک",
+                    "CODE" to "کد یکتا",
+                    "AREA" to "متراژ",
                     "BEDROOMS" to "خواب",
-                    "REGION" to "منطقه الفبایی"
+                    "REGION" to "منطقه"
                 )
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     sortOptions.forEach { (field, label) ->
                         val isSel = sortBy == field
                         FilterChip(
                             selected = isSel,
                             onClick = { onSortByChange(field) },
-                            label = { Text(label, fontSize = 10.sp, maxLines = 1) },
+                            label = { Text(label, fontSize = 10.sp, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1614,43 +1698,15 @@ fun PropertyCardItem(
             ) {
                 Column {
                     Text(
-                        text = when (property.financialMode) {
-                            "RENT_AND_MORTGAGE" -> {
-                                val hasDep = property.depositAmount != null && property.depositAmount > 0
-                                val hasRent = property.rentAmount != null && property.rentAmount > 0
-                                if (hasDep && !hasRent) "رهن کامل"
-                                else if (!hasDep && hasRent) "اجاره کامل"
-                                else "رهن / اجاره"
-                            }
-                            "FULL_MORTGAGE" -> "رهن کامل"
-                            "FULL_RENT" -> "اجاره کامل"
-                            else -> "شرایط مالی"
-                        },
+                        text = "شرایط پرداخت / قیمت",
                         fontSize = 10.sp,
                         color = Color(0xFF64748B),
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = when (property.financialMode) {
-                            "RENT_AND_MORTGAGE" -> {
-                                val hasDep = property.depositAmount != null && property.depositAmount > 0
-                                val hasRent = property.rentAmount != null && property.rentAmount > 0
-                                if (hasDep && hasRent) {
-                                    "${PersianUtils.formatPrice(property.depositAmount)} رهن / ${PersianUtils.formatPrice(property.rentAmount)} اجاره"
-                                } else if (hasDep) {
-                                    "${PersianUtils.formatPrice(property.depositAmount)} رهن"
-                                } else if (hasRent) {
-                                    "${PersianUtils.formatPrice(property.rentAmount)} اجاره"
-                                } else {
-                                    "توافقی"
-                                }
-                            }
-                            "FULL_MORTGAGE" -> PersianUtils.formatPrice(property.depositAmount)
-                            "FULL_RENT" -> PersianUtils.formatPrice(property.rentAmount)
-                            else -> "توافقی"
-                        },
-                        fontSize = 14.sp,
+                        text = PersianUtils.generatePropertyPriceText(property),
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -2276,6 +2332,8 @@ fun AddEditPropertyDialog(
     var financialMode by remember { mutableStateOf(property?.financialMode ?: "RENT_AND_MORTGAGE") }
     var depositAmount by remember { mutableStateOf(property?.depositAmount?.toLong()?.toString() ?: "") }
     var rentAmount by remember { mutableStateOf(property?.rentAmount?.toLong()?.toString() ?: "") }
+    var fullDepositAmount by remember { mutableStateOf(property?.fullDepositAmount?.toLong()?.toString() ?: "") }
+    var fullRentAmount by remember { mutableStateOf(property?.fullRentAmount?.toLong()?.toString() ?: "") }
 
     // Internal Agency Details
     var isCollaborative by remember { mutableStateOf(property?.isCollaborative ?: false) }
@@ -2715,103 +2773,131 @@ fun AddEditPropertyDialog(
 
                         3 -> {
                             // Step 3: Financial Specs
-                            Text("اطلاعات مالی فایل *", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                val modes = listOf(
-                                    "RENT_AND_MORTGAGE" to "رهن و اجاره",
-                                    "FULL_MORTGAGE" to "رهن کامل",
-                                    "FULL_RENT" to "اجاره کامل"
-                                )
-                                modes.forEach { (m, label) ->
-                                    val isSel = financialMode == m
-                                    Button(
-                                        onClick = { financialMode = m },
-                                        modifier = Modifier.weight(1f).height(44.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (isSel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Text(
-                                            text = label,
-                                            color = if (isSel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
+                            Text("اطلاعات مالی فایل (امکان پر کردن چند حالت)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                            Text("شما می‌توانید یک یا چند حالت مالی زیر را پر کنید. در خروجی هر کدام که پر شده باشد نشان داده می‌شود:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            
+                            Spacer(modifier = Modifier.height(4.dp))
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            // 1. رهن و اجاره (Mortgage and Rent)
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                if (financialMode == "RENT_AND_MORTGAGE" || financialMode == "FULL_MORTGAGE") {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        OutlinedTextField(
-                                            value = depositAmount,
-                                            onValueChange = { depositAmount = it },
-                                            modifier = Modifier.fillMaxWidth().testTag("deposit_input"),
-                                            label = { Text(if (financialMode == "FULL_MORTGAGE") "مبلغ رهن کامل (تومان) *" else "مبلغ رهن (تومان) *") },
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        if (depositAmount.isNotEmpty()) {
-                                            val depLong = depositAmount.toLongOrNull()
-                                            val wordsText = if (depLong != null) PersianUtils.numberToPersianWords(depLong) + " تومان" else ""
-                                            Column {
-                                                Text(
-                                                    text = "معادل: " + PersianUtils.formatPrice(depositAmount.toDoubleOrNull()),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.padding(start = 4.dp, top = 2.dp)
-                                                )
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("۱. رهن و اجاره", fontWeight = FontWeight.Bold, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.primary)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = depositAmount,
+                                                onValueChange = { depositAmount = it },
+                                                modifier = Modifier.fillMaxWidth().testTag("deposit_input"),
+                                                label = { Text("مبلغ رهن (تومان)", fontSize = 11.sp) },
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                shape = RoundedCornerShape(10.dp)
+                                            )
+                                            if (depositAmount.isNotEmpty()) {
+                                                val depLong = depositAmount.toLongOrNull()
+                                                val wordsText = if (depLong != null) PersianUtils.numberToPersianWords(depLong) + " تومان" else ""
                                                 if (wordsText.isNotEmpty()) {
                                                     Text(
-                                                        text = "($wordsText)",
+                                                        text = wordsText,
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = MaterialTheme.colorScheme.secondary,
-                                                        modifier = Modifier.padding(start = 4.dp, top = 1.dp)
+                                                        modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            OutlinedTextField(
+                                                value = rentAmount,
+                                                onValueChange = { rentAmount = it },
+                                                modifier = Modifier.fillMaxWidth().testTag("rent_input"),
+                                                label = { Text("مبلغ اجاره (تومان)", fontSize = 11.sp) },
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                shape = RoundedCornerShape(10.dp)
+                                            )
+                                            if (rentAmount.isNotEmpty()) {
+                                                val rentLong = rentAmount.toLongOrNull()
+                                                val wordsText = if (rentLong != null) PersianUtils.numberToPersianWords(rentLong) + " تومان" else ""
+                                                if (wordsText.isNotEmpty()) {
+                                                    Text(
+                                                        text = wordsText,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.secondary,
+                                                        modifier = Modifier.padding(start = 4.dp, top = 2.dp)
                                                     )
                                                 }
                                             }
                                         }
                                     }
                                 }
+                            }
 
-                                if (financialMode == "RENT_AND_MORTGAGE" || financialMode == "FULL_RENT") {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        OutlinedTextField(
-                                            value = rentAmount,
-                                            onValueChange = { rentAmount = it },
-                                            modifier = Modifier.fillMaxWidth().testTag("rent_input"),
-                                            label = { Text(if (financialMode == "FULL_RENT") "مبلغ اجاره کامل (تومان) *" else "مبلغ اجاره (تومان) *") },
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        if (rentAmount.isNotEmpty()) {
-                                            val rentLong = rentAmount.toLongOrNull()
-                                            val wordsText = if (rentLong != null) PersianUtils.numberToPersianWords(rentLong) + " تومان" else ""
-                                            Column {
-                                                Text(
-                                                    text = "معادل: " + PersianUtils.formatPrice(rentAmount.toDoubleOrNull()),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.padding(start = 4.dp, top = 2.dp)
-                                                )
-                                                if (wordsText.isNotEmpty()) {
-                                                    Text(
-                                                        text = "($wordsText)",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.secondary,
-                                                        modifier = Modifier.padding(start = 4.dp, top = 1.dp)
-                                                    )
-                                                }
-                                            }
+                            // 2. رهن کامل (Full Mortgage)
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("۲. رهن کامل", fontWeight = FontWeight.Bold, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.primary)
+                                    OutlinedTextField(
+                                        value = fullDepositAmount,
+                                        onValueChange = { fullDepositAmount = it },
+                                        modifier = Modifier.fillMaxWidth().testTag("full_deposit_input"),
+                                        label = { Text("مبلغ رهن کامل (تومان)", fontSize = 11.sp) },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    if (fullDepositAmount.isNotEmpty()) {
+                                        val valLong = fullDepositAmount.toLongOrNull()
+                                        val wordsText = if (valLong != null) PersianUtils.numberToPersianWords(valLong) + " تومان" else ""
+                                        if (wordsText.isNotEmpty()) {
+                                            Text(
+                                                text = wordsText,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.secondary,
+                                                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 3. اجاره کامل (Full Rent)
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("۳. اجاره کامل", fontWeight = FontWeight.Bold, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.primary)
+                                    OutlinedTextField(
+                                        value = fullRentAmount,
+                                        onValueChange = { fullRentAmount = it },
+                                        modifier = Modifier.fillMaxWidth().testTag("full_rent_input"),
+                                        label = { Text("مبلغ اجاره کامل (تومان)", fontSize = 11.sp) },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    if (fullRentAmount.isNotEmpty()) {
+                                        val valLong = fullRentAmount.toLongOrNull()
+                                        val wordsText = if (valLong != null) PersianUtils.numberToPersianWords(valLong) + " تومان" else ""
+                                        if (wordsText.isNotEmpty()) {
+                                            Text(
+                                                text = wordsText,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.secondary,
+                                                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -3017,17 +3103,11 @@ fun AddEditPropertyDialog(
                             } else if (currentStep == 3) {
                                 val depVal = depositAmount.toDoubleOrNull()
                                 val rentVal = rentAmount.toDoubleOrNull()
+                                val fullDepVal = fullDepositAmount.toDoubleOrNull()
+                                val fullRentVal = fullRentAmount.toDoubleOrNull()
 
-                                if (financialMode == "RENT_AND_MORTGAGE" && depVal == null && rentVal == null) {
-                                    Toast.makeText(context, "لطفاً حداقل یکی از مقادیر رهن یا اجاره را وارد کنید.", Toast.LENGTH_SHORT).show()
-                                    return@Button
-                                }
-                                if (financialMode == "FULL_MORTGAGE" && depVal == null) {
-                                    Toast.makeText(context, "لطفاً مقدار رهن کامل را وارد کنید.", Toast.LENGTH_SHORT).show()
-                                    return@Button
-                                }
-                                if (financialMode == "FULL_RENT" && rentVal == null) {
-                                    Toast.makeText(context, "لطفاً مقدار اجاره کامل را وارد کنید.", Toast.LENGTH_SHORT).show()
+                                if (depVal == null && rentVal == null && fullDepVal == null && fullRentVal == null) {
+                                    Toast.makeText(context, "لطفاً حداقل یکی از حالت‌های مالی را تکمیل کنید.", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
                                 currentStep++
@@ -3037,6 +3117,8 @@ fun AddEditPropertyDialog(
                                 val intBedrooms = bedrooms.toIntOrNull() ?: 0
                                 val depVal = depositAmount.toDoubleOrNull()
                                 val rentVal = rentAmount.toDoubleOrNull()
+                                val fullDepVal = fullDepositAmount.toDoubleOrNull()
+                                val fullRentVal = fullRentAmount.toDoubleOrNull()
 
                                 // Combine selected amenities and custom amenities if shown
                                 val allAmenities = if (showOptionalAmenities) {
@@ -3063,6 +3145,8 @@ fun AddEditPropertyDialog(
                                     financialMode = financialMode,
                                     depositAmount = depVal,
                                     rentAmount = rentVal,
+                                    fullDepositAmount = fullDepVal,
+                                    fullRentAmount = fullRentVal,
                                     imagesString = selectedImageUrlList.joinToString(","),
                                     isCollaborative = isCollaborative,
                                     ownerName = ownerName,
@@ -3109,8 +3193,9 @@ fun AddEditPropertyDialog(
 
 @Composable
 fun BackupRestoreDialog(
+    properties: List<Property>,
     onDismiss: () -> Unit,
-    onExport: () -> Unit,
+    onExport: (List<Property>) -> Unit,
     onImport: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -3119,6 +3204,7 @@ fun BackupRestoreDialog(
     var customHeader by remember { mutableStateOf(prefs.getString("custom_header", "") ?: "") }
     var customFooter by remember { mutableStateOf(prefs.getString("custom_footer", "") ?: "") }
     var importText by remember { mutableStateOf("") }
+    var selectedForBackup by remember(properties) { mutableStateOf(properties.toSet()) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -3193,14 +3279,132 @@ fun BackupRestoreDialog(
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = "با استفاده از این بخش می‌توانید تمام اطلاعات ثبت‌شده ملکی را صادر کرده و کپی بگیرید یا از فایل پشتیبان کپی شده بازیابی کنید.",
+                    text = "با استفاده از این بخش می‌توانید اطلاعات موارد دلخواه را صادر کرده و کپی بگیرید یا از فایل پشتیبان کپی شده بازیابی کنید.",
                     fontSize = 12.sp,
                     lineHeight = 18.sp
                 )
 
-                // Export
+                Text(
+                    text = "انتخاب فایل‌ها برای پشتیبان‌گیری:",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                )
+
+                // Select All / Deselect All
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = { selectedForBackup = properties.toSet() },
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text("انتخاب همه", fontSize = 11.sp)
+                    }
+                    TextButton(
+                        onClick = { selectedForBackup = emptySet() },
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text("حذف انتخاب‌ها", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "انتخاب شده: ${selectedForBackup.size} از ${properties.size}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Scrollable container for properties with checkboxes
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f))
+                ) {
+                    if (properties.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("هیچ فایلی برای پشتیبان‌گیری وجود ندارد.", fontSize = 11.sp, color = Color.Gray)
+                        }
+                    } else {
+                        val scrollState = rememberScrollState()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(scrollState)
+                                .padding(4.dp)
+                        ) {
+                            properties.forEach { p ->
+                                val isChecked = selectedForBackup.contains(p)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable {
+                                            selectedForBackup = if (isChecked) {
+                                                selectedForBackup - p
+                                            } else {
+                                                selectedForBackup + p
+                                            }
+                                        }
+                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = isChecked,
+                                        onCheckedChange = { checked ->
+                                            selectedForBackup = if (checked == true) {
+                                                selectedForBackup + p
+                                            } else {
+                                                selectedForBackup - p
+                                            }
+                                        },
+                                        modifier = Modifier.scale(0.85f)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Column {
+                                        Text(
+                                            text = "کد ${p.code} • ${p.region}",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "${p.area.toInt()} متر • ${p.bedrooms} خوابه • ${when(p.type) {
+                                                "APARTMENT" -> "آپارتمان"
+                                                "VILLA" -> "ویلایی"
+                                                "LAND" -> "زمین"
+                                                "COMMERCIAL" -> "تجاری"
+                                                else -> p.type
+                                            }}",
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                }
+                                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.05f))
+                            }
+                        }
+                    }
+                }
+
+                // Export Button
                 Button(
-                    onClick = onExport,
+                    onClick = {
+                        if (selectedForBackup.isEmpty()) {
+                            Toast.makeText(context, "لطفاً حداقل یک فایل را انتخاب کنید.", Toast.LENGTH_SHORT).show()
+                        } else {
+                            onExport(selectedForBackup.toList())
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
                 ) {
@@ -3670,19 +3874,7 @@ fun generatePromptText(
         detailsBuilder.append("توضیحات: ${property.description.trim()}\n")
     }
     
-    val priceText = when (property.financialMode) {
-        "RENT_AND_MORTGAGE" -> {
-            val depText = if (property.depositAmount != null && property.depositAmount > 0) "${PersianUtils.formatPrice(property.depositAmount)} رهن" else ""
-            val rentText = if (property.rentAmount != null && property.rentAmount > 0) "${PersianUtils.formatPrice(property.rentAmount)} اجاره" else ""
-            if (depText.isNotEmpty() && rentText.isNotEmpty()) "$depText و $rentText"
-            else if (depText.isNotEmpty()) "$depText کامل"
-            else if (rentText.isNotEmpty()) "$rentText کامل"
-            else "توافقی"
-        }
-        "FULL_MORTGAGE" -> "${PersianUtils.formatPrice(property.depositAmount)} رهن کامل"
-        "FULL_RENT" -> "${PersianUtils.formatPrice(property.rentAmount)} اجاره کامل"
-        else -> "توافقی"
-    }
+    val priceText = PersianUtils.generatePropertyPriceText(property)
     detailsBuilder.append("قیمت: $priceText\n")
     detailsBuilder.append("کد فایل: ${property.code}\n\n")
 
@@ -3698,6 +3890,10 @@ fun generatePromptText(
         "متن آگهی حرفه‌ای" -> "لطفاً یک متن کامل، توصیفی، اصولی و حرفه‌ای برای درج در آگهی‌های پلتفرم‌های ملکی بنویس. در پایان کد فایل را نمایش بده."
         "متن خلاقانه و جذاب" -> "لطفاً یک متن تبلیغاتی فوق‌العاده خلاقانه با رویکرد بازاریابی نوین، داستانی یا غافلگیرکننده بنویس که حداکثر مخاطب را جذب کند. در پایان کد فایل را نمایش بده."
         else -> "لطفاً یک متن آگهی تبلیغاتی بنویس. در پایان کد فایل را نمایش بده."
+    }
+
+    if (agencyName.isNotEmpty()) {
+        instructions += " در متن تبلیغاتی تولید شده، حتماً نام بنگاه «$agencyName» را به عنوان معرف فایل ذکر کن."
     }
 
     if (templateName.contains("استوری")) {
@@ -4186,7 +4382,8 @@ fun StepLine(isActive: Boolean) {
 
 @Composable
 fun SettingsAndBackupScreen(
-    onExport: () -> Unit,
+    properties: List<Property>,
+    onExport: (List<Property>) -> Unit,
     onImport: (String) -> Unit,
     licenseStatus: LicenseStatus,
     onLicenseChanged: () -> Unit,
@@ -4199,6 +4396,7 @@ fun SettingsAndBackupScreen(
     var customFooter by remember { mutableStateOf(prefs.getString("custom_footer", "") ?: "") }
     var copyFormat by remember { mutableStateOf(prefs.getString("copy_format", "standard") ?: "standard") }
     var importText by remember { mutableStateOf("") }
+    var selectedForBackup by remember(properties) { mutableStateOf(properties.toSet()) }
 
     var compactShowType by remember { mutableStateOf(prefs.getBoolean("compact_show_type", true)) }
     var compactShowRegion by remember { mutableStateOf(prefs.getBoolean("compact_show_region", true)) }
@@ -4320,6 +4518,84 @@ fun SettingsAndBackupScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
+
+                    val totalDays = remember(licenseStatus) { LicenseManager.getTotalDaysFromSavedLicense(context) }
+                    if (!licenseStatus.isLifetime && totalDays > 0) {
+                        val progress = (licenseStatus.remainingDays.toFloat() / totalDays.toFloat()).coerceIn(0f, 1f)
+                        val progressBarColor = when {
+                            progress > 0.6f -> Color(0xFF10B981) // Green
+                            progress > 0.25f -> Color(0xFFF59E0B) // Amber/Yellow
+                            else -> Color(0xFFEF4444) // Red
+                        }
+                        
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            LinearProgressIndicator(
+                                progress = progress,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = progressBarColor,
+                                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "میزان مصرف لایسنس:",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                                Text(
+                                    text = "${PersianUtils.formatNumber(licenseStatus.remainingDays)} روز از ${PersianUtils.formatNumber(totalDays)} روز باقی‌مانده",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = progressBarColor
+                                )
+                            }
+                        }
+                    } else if (licenseStatus.isLifetime) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            LinearProgressIndicator(
+                                progress = 1.0f,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = Color(0xFF10B981),
+                                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "میزان مصرف لایسنس:",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                                Text(
+                                    text = "بدون محدودیت زمانی ♾️",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF10B981)
+                                )
+                            }
+                        }
+                    }
                 } else {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -4438,16 +4714,18 @@ fun SettingsAndBackupScreen(
                     Button(
                         onClick = {
                             if (activationInputKey.isNotEmpty()) {
-                                if (LicenseManager.isValidLicense(activationInputKey, androidId)) {
-                                    prefs.edit()
-                                        .putString("license_key", activationInputKey.trim().uppercase())
-                                        .putLong("license_activation_time", System.currentTimeMillis())
-                                        .apply()
-                                    onLicenseChanged()
-                                    activationInputKey = ""
-                                    Toast.makeText(context, "برنامه با موفقیت فعال شد! 🎉", Toast.LENGTH_LONG).show()
-                                } else {
-                                    Toast.makeText(context, "کد فعال‌سازی لایسنس نامعتبر است!", Toast.LENGTH_SHORT).show()
+                                when (LicenseManager.registerLicense(context, activationInputKey)) {
+                                    com.example.util.RegisterResult.Success -> {
+                                        onLicenseChanged()
+                                        activationInputKey = ""
+                                        Toast.makeText(context, "برنامه با موفقیت فعال شد! 🎉", Toast.LENGTH_LONG).show()
+                                    }
+                                    com.example.util.RegisterResult.AlreadyUsed -> {
+                                        Toast.makeText(context, "این کد فعال‌سازی قبلاً استفاده شده است و قابل استفاده مجدد نیست!", Toast.LENGTH_LONG).show()
+                                    }
+                                    com.example.util.RegisterResult.Invalid -> {
+                                        Toast.makeText(context, "کد فعال‌سازی لایسنس نامعتبر است!", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             }
                         },
@@ -4633,13 +4911,132 @@ fun SettingsAndBackupScreen(
             color = MaterialTheme.colorScheme.primary
         )
         Text(
-            text = "با استفاده از این بخش می‌توانید تمام اطلاعات ثبت‌شده ملکی را صادر کرده و کپی بگیرید یا از فایل پشتیبان کپی شده بازیابی کنید.",
+            text = "با استفاده از این بخش می‌توانید اطلاعات موارد دلخواه را صادر کرده و کپی بگیرید یا از فایل پشتیبان کپی شده بازیابی کنید.",
             fontSize = 12.sp,
             lineHeight = 18.sp
         )
 
+        Text(
+            text = "انتخاب فایل‌ها برای پشتیبان‌گیری:",
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+        )
+
+        // Select All / Deselect All
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(
+                onClick = { selectedForBackup = properties.toSet() },
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Text("انتخاب همه", fontSize = 11.sp)
+            }
+            TextButton(
+                onClick = { selectedForBackup = emptySet() },
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Text("حذف انتخاب‌ها", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "انتخاب شده: ${selectedForBackup.size} از ${properties.size}",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        // Scrollable container for properties with checkboxes
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f))
+        ) {
+            if (properties.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("هیچ فایلی برای پشتیبان‌گیری وجود ندارد.", fontSize = 11.sp, color = Color.Gray)
+                }
+            } else {
+                val scrollState = rememberScrollState()
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(4.dp)
+                ) {
+                    properties.forEach { p ->
+                        val isChecked = selectedForBackup.contains(p)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    selectedForBackup = if (isChecked) {
+                                        selectedForBackup - p
+                                    } else {
+                                        selectedForBackup + p
+                                    }
+                                }
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isChecked,
+                                onCheckedChange = { checked ->
+                                    selectedForBackup = if (checked == true) {
+                                        selectedForBackup + p
+                                    } else {
+                                        selectedForBackup - p
+                                    }
+                                },
+                                modifier = Modifier.scale(0.85f)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Column {
+                                Text(
+                                    text = "کد ${p.code} • ${p.region}",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "${p.area.toInt()} متر • ${p.bedrooms} خوابه • ${when(p.type) {
+                                        "APARTMENT" -> "آپارتمان"
+                                        "VILLA" -> "ویلایی"
+                                        "LAND" -> "زمین"
+                                        "COMMERCIAL" -> "تجاری"
+                                        else -> p.type
+                                    }}",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.05f))
+                    }
+                }
+            }
+        }
+
+        // Export Button
         Button(
-            onClick = onExport,
+            onClick = {
+                if (selectedForBackup.isEmpty()) {
+                    Toast.makeText(context, "لطفاً حداقل یک فایل را انتخاب کنید.", Toast.LENGTH_SHORT).show()
+                } else {
+                    onExport(selectedForBackup.toList())
+                }
+            },
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(10.dp)
         ) {
@@ -4794,47 +5191,84 @@ fun CompactPropertyItem(
             ) {
                 Row(
                     modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (isSelectionMode) {
                         Checkbox(
                             checked = isSelected,
                             onCheckedChange = { onSelectionToggle() },
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier
+                                .size(24.dp)
+                                .align(Alignment.CenterVertically)
                         )
                     }
                     
-                    // Code tag
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(6.dp)
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+                        // First Row: Code tag and main specifications
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (property.code.isNotEmpty()) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = property.code,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            
+                            val floorText = if (property.type == "آپارتمان") {
+                                when {
+                                    property.unitFloor == 0 -> " | طبقه: همکف"
+                                    property.unitFloor != null -> " | طبقه: ${PersianUtils.formatNumber(property.unitFloor)}"
+                                    else -> ""
+                                }
+                            } else ""
+                            
+                            val specs = "${property.type} | ${property.region} | ${PersianUtils.formatArea(property.area)} متر | ${PersianUtils.formatNumber(property.bedrooms)} خواب$floorText"
+                            Text(
+                                text = specs,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        
+                        // Second Row: Price & Amenities & Description
+                        val priceText = PersianUtils.generatePropertyPriceText(property)
+                        
+                        val amenitiesParts = mutableListOf<String>()
+                        if (property.cabinetType.isNotEmpty()) {
+                            amenitiesParts.add("کابینت: ${property.cabinetType}")
+                        }
+                        if (property.otherAmenities.isNotEmpty()) {
+                            amenitiesParts.add("امکانات: ${property.otherAmenities}")
+                        }
+                        val amenitiesText = if (amenitiesParts.isNotEmpty()) " | ${amenitiesParts.joinToString(" - ")}" else ""
+                        val descText = if (property.description.trim().isNotEmpty()) " | 📝 ${property.description.trim()}" else ""
+                        
                         Text(
-                            text = property.code,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            text = "💰 $priceText$amenitiesText$descText",
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
-
-                    // Inline property info written together on a single line side-by-side (NO EMOJIS)
-                    val priceText = when (property.financialMode) {
-                        "RENT_AND_MORTGAGE" -> "${PersianUtils.formatPrice(property.depositAmount)} رهن / ${PersianUtils.formatPrice(property.rentAmount)} اجاره"
-                        "FULL_MORTGAGE" -> "${PersianUtils.formatPrice(property.depositAmount)} رهن کامل"
-                        "FULL_RENT" -> "${PersianUtils.formatPrice(property.rentAmount)} اجاره کامل"
-                        else -> "توافقی"
-                    }
-                    
-                    Text(
-                        text = "${property.type} | ${property.region} | ${PersianUtils.formatArea(property.area)} متر | ${PersianUtils.formatNumber(property.bedrooms)} خواب | $priceText",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
                 
                 Row(

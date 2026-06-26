@@ -125,78 +125,127 @@ object PersianUtils {
         return intArrayOf(jy, jm, jd)
     }
 
+    fun getPropertyTypeEmoji(type: String): String {
+        return when {
+            type.contains("آپارتمان") -> "🏢"
+            type.contains("ویلا") || type.contains("باغ") -> "🏡"
+            type.contains("خانه") || type.contains("کلنگی") || type.contains("مستغلات") -> "🏠"
+            type.contains("تجاری") || type.contains("مغازه") || type.contains("دفتر") || type.contains("اداری") -> "🏢"
+            else -> "🏠"
+        }
+    }
+
+    fun generatePropertyPriceText(p: Property): String {
+        val schemes = mutableListOf<String>()
+        
+        // 1. Full Mortgage (رهن کامل)
+        if (p.fullDepositAmount != null && p.fullDepositAmount > 0) {
+            schemes.add("رهن کامل: ${formatPrice(p.fullDepositAmount)}")
+        }
+        
+        // 2. Rent and Mortgage (رهن و اجاره)
+        if ((p.depositAmount != null && p.depositAmount > 0) || (p.rentAmount != null && p.rentAmount > 0)) {
+            val parts = mutableListOf<String>()
+            if (p.depositAmount != null && p.depositAmount > 0) {
+                parts.add("رهن: ${formatPrice(p.depositAmount)}")
+            }
+            if (p.rentAmount != null && p.rentAmount > 0) {
+                parts.add("اجاره: ${formatPrice(p.rentAmount)}")
+            }
+            schemes.add(parts.joinToString(" و "))
+        }
+        
+        // 3. Full Rent (اجاره کامل)
+        if (p.fullRentAmount != null && p.fullRentAmount > 0) {
+            schemes.add("اجاره کامل: ${formatPrice(p.fullRentAmount)}")
+        }
+        
+        // Fallback to legacy fields if none of the above are explicitly filled but financialMode was set
+        if (schemes.isEmpty()) {
+            return when (p.financialMode) {
+                "RENT_AND_MORTGAGE" -> "رهن: ${formatPrice(p.depositAmount)} / اجاره: ${formatPrice(p.rentAmount)}"
+                "FULL_MORTGAGE" -> "رهن کامل: ${formatPrice(p.depositAmount)}"
+                "FULL_RENT" -> "اجاره کامل: ${formatPrice(p.rentAmount)}"
+                else -> "توافقی"
+            }
+        }
+        
+        return schemes.joinToString(" یا ")
+    }
+
     // Single Property Telegram Output
     fun generatePropertySingleLineText(context: Context?, p: Property): String {
         val parts = mutableListOf<String>()
         
-        // 1. Unique code (Must be at the very beginning!)
-        if (p.code.isNotEmpty()) {
-            parts.add(p.code)
-        }
+        // 1. Emoji and Code/Type
+        val emoji = getPropertyTypeEmoji(p.type)
+        val firstLine = if (p.code.isNotEmpty()) "$emoji ${p.code} - ${p.type}" else "$emoji ${p.type}"
+        parts.add(firstLine)
         
-        // 2. Type
-        parts.add(p.type)
-        
-        // 3. Region
+        // 2. Region
         if (p.region.isNotEmpty()) {
             parts.add("📍 ${p.region}")
         }
         
-        // 4. Area
+        // 3. Area
         parts.add("📐 ${formatArea(p.area)} متر")
         
-        // 5. Bedrooms
+        // 4. Bedrooms
         parts.add("🛏 ${formatNumber(p.bedrooms)} خواب")
         
-        // 6. Floors (if applicable)
+        // 5. Floors (if applicable)
         if (p.type == "آپارتمان") {
             val floorParts = mutableListOf<String>()
             if (p.totalFloors != null && p.totalFloors > 0) {
                 floorParts.add("کل طبقات: ${formatNumber(p.totalFloors)}")
             }
             if (p.unitFloor != null) {
-                floorParts.add("طبقه: ${formatNumber(p.unitFloor)}")
+                val floorText = if (p.unitFloor == 0) "همکف" else formatNumber(p.unitFloor)
+                floorParts.add("طبقه: $floorText")
             }
             if (floorParts.isNotEmpty()) {
                 parts.add(floorParts.joinToString("، "))
             }
         }
         
-        // 7. Parking
+        // 6. Parking
         parts.add("🚗 پارکینگ: ${if (p.hasParking) "دارد" else "ندارد"}")
         
-        // 8. Cabinet type
+        // 7. Cabinet and Amenities combined
+        val cabAndAmenParts = mutableListOf<String>()
         if (p.cabinetType.isNotEmpty()) {
-            parts.add("کابینت: ${p.cabinetType}")
+            cabAndAmenParts.add("🚪 کابینت: ${p.cabinetType}")
         }
-        
-        // 9. Other amenities
         if (p.otherAmenities.isNotEmpty()) {
-            parts.add("✨ امکانات: ${p.otherAmenities}")
+            cabAndAmenParts.add("✨ امکانات: ${p.otherAmenities}")
+        }
+        if (cabAndAmenParts.isNotEmpty()) {
+            parts.add(cabAndAmenParts.joinToString(" - "))
         }
         
-        // 10. Financial Mode & Price
-        val priceText = when (p.financialMode) {
-            "RENT_AND_MORTGAGE" -> "رهن: ${formatPrice(p.depositAmount)} / اجاره: ${formatPrice(p.rentAmount)}"
-            "FULL_MORTGAGE" -> "رهن کامل: ${formatPrice(p.depositAmount)}"
-            "FULL_RENT" -> "اجاره کامل: ${formatPrice(p.rentAmount)}"
-            else -> "توافقی"
-        }
+        // 8. Financial Mode & Price
+        val priceText = generatePropertyPriceText(p)
         parts.add("💰 $priceText")
         
-        // 11. Description
+        // 9. Description
         if (p.description.trim().isNotEmpty()) {
             parts.add("📝 ${p.description.trim()}")
         }
         
-        return parts.joinToString(" - ")
+        return parts.joinToString("\n")
     }
 
     fun generatePropertyCompactSummaryText(p: Property): String {
         val parts = mutableListOf<String>()
+        val emoji = getPropertyTypeEmoji(p.type)
+        
+        // First part combined with emoji or starts with emoji
         if (p.code.isNotEmpty()) {
-            parts.add(p.code)
+            parts.add("$emoji ${p.code}")
+        } else {
+            parts.add(emoji)
         }
+        
         parts.add(p.type)
         if (p.region.isNotEmpty()) {
             parts.add(p.region)
@@ -204,19 +253,35 @@ object PersianUtils {
         parts.add("${formatArea(p.area)} متر")
         parts.add("${formatNumber(p.bedrooms)} خواب")
         
-        val priceText = when (p.financialMode) {
-            "RENT_AND_MORTGAGE" -> "${formatPrice(p.depositAmount)} رهن / ${formatPrice(p.rentAmount)} اجاره"
-            "FULL_MORTGAGE" -> "${formatPrice(p.depositAmount)} رهن کامل"
-            "FULL_RENT" -> "${formatPrice(p.rentAmount)} اجاره کامل"
-            else -> "توافقی"
-        }
-        parts.add(priceText)
-        
-        if (p.description.trim().isNotEmpty()) {
-            parts.add(p.description.trim())
+        // If apartment, add floor info if floor is 0 (همکف) or any other value
+        if (p.type == "آپارتمان") {
+            val floorText = if (p.unitFloor == 0) "همکف" else if (p.unitFloor != null) formatNumber(p.unitFloor) else ""
+            if (floorText.isNotEmpty()) {
+                parts.add("طبقه: $floorText")
+            }
         }
         
-        return parts.joinToString(" | ")
+        // Add cabinet type if present
+        if (p.cabinetType.isNotEmpty()) {
+            parts.add("کابینت: ${p.cabinetType}")
+        }
+        
+        // Add other amenities if present
+        if (p.otherAmenities.isNotEmpty()) {
+            parts.add("امکانات: ${p.otherAmenities}")
+        }
+        
+        val line1 = parts.joinToString(" | ")
+        
+        // Line 2 (newline separated, starts with 💰 and contains the price)
+        val priceText = generatePropertyPriceText(p)
+        val line2 = "💰 $priceText"
+        
+        return if (p.description.trim().isNotEmpty()) {
+            "$line1\n$line2\n📝 ${p.description.trim()}"
+        } else {
+            "$line1\n$line2"
+        }
     }
 
     fun buildCopyWithHeaderFooter(context: Context?, body: String): String {

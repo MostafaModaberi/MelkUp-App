@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import com.example.data.model.Property
 import com.example.data.model.Region
 
-@Database(entities = [Property::class, Region::class], version = 1, exportSchema = false)
+@Database(entities = [Property::class, Region::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun propertyDao(): PropertyDao
 
