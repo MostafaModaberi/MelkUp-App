@@ -61,6 +61,15 @@ import com.example.util.PersianUtils
 import com.example.util.LicenseManager
 import com.example.util.LicenseStatus
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.clickable
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,6 +117,12 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
     var sharePropertiesList by remember { mutableStateOf<List<Property>>(emptyList()) }
     var propertyToEdit by remember { mutableStateOf<Property?>(null) }
     var propertyToView by remember { mutableStateOf<Property?>(null) }
+
+    // Full screen image viewer state
+    var fullScreenImageUrls by remember { mutableStateOf<List<String>?>(null) }
+    var fullScreenImageInitialIndex by remember { mutableStateOf(0) }
+
+    var showCustomizationDialog by remember { mutableStateOf(false) }
 
     var currentTab by remember { mutableStateOf("home") }
     var isCompactView by remember { mutableStateOf(false) }
@@ -614,7 +629,7 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                                 if (selectedProps.isEmpty()) {
                                     Toast.makeText(context, "هیچ فایلی انتخاب نشده است", Toast.LENGTH_SHORT).show()
                                 } else {
-                                    val text = PersianUtils.generateGroupSummaryOutput(selectedProps)
+                                    val text = PersianUtils.generateGroupSummaryOutput(context, selectedProps)
                                     PersianUtils.copyToClipboard(context, text)
                                 }
                             },
@@ -921,7 +936,13 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                         onLicenseChanged = {
                             licenseStatus = LicenseManager.checkLicenseStatus(context)
                         },
-                        propertiesCount = rawProperties.size
+                        propertiesCount = rawProperties.size,
+                        onShowCustomization = {
+                            showCustomizationDialog = true
+                        },
+                        onShowBackupDialog = {
+                            showBackupDialog = true
+                        }
                     )
                 }
             }
@@ -1065,7 +1086,28 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
             onToggleSpecial = {
                 viewModel.toggleSpecial(propertyToView!!)
                 propertyToView = propertyToView!!.copy(isSpecial = !propertyToView!!.isSpecial)
+            },
+            onImageClick = { imgUrls, index ->
+                fullScreenImageUrls = imgUrls
+                fullScreenImageInitialIndex = index
             }
+        )
+    }
+
+    if (fullScreenImageUrls != null) {
+        FullScreenImageViewer(
+            images = fullScreenImageUrls!!,
+            initialIndex = fullScreenImageInitialIndex,
+            onClose = {
+                fullScreenImageUrls = null
+            }
+        )
+    }
+
+    if (showCustomizationDialog) {
+        CustomizationDialog(
+            onDismiss = { showCustomizationDialog = false },
+            context = context
         )
     }
 
@@ -1086,6 +1128,9 @@ fun MelkUpApp(viewModel: PropertyViewModel = viewModel()) {
                         Toast.makeText(context, "خطا در وارد کردن پشتیبان. فرمت نامعتبر است.", Toast.LENGTH_LONG).show()
                     }
                 }
+            },
+            onGetBackupJson = { selectedList ->
+                viewModel.exportBackupJson(selectedList)
             }
         )
     }
@@ -1885,7 +1930,8 @@ fun PropertyDetailsDialog(
     onDismiss: () -> Unit,
     onStatusChange: (String) -> Unit,
     onEdit: () -> Unit,
-    onToggleSpecial: () -> Unit
+    onToggleSpecial: () -> Unit,
+    onImageClick: (List<String>, Int) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("melkup_prefs", android.content.Context.MODE_PRIVATE) }
@@ -2008,7 +2054,10 @@ fun PropertyDetailsDialog(
                                 items(images) { imgUrl ->
                                     Card(
                                         shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier.width(220.dp).fillMaxHeight()
+                                        modifier = Modifier
+                                            .width(220.dp)
+                                            .fillMaxHeight()
+                                            .clickable { onImageClick(images, images.indexOf(imgUrl)) }
                                     ) {
                                         AsyncImage(
                                             model = imgUrl,
@@ -2075,21 +2124,26 @@ fun PropertyDetailsDialog(
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                when (property.financialMode) {
-                                    "RENT_AND_MORTGAGE" -> {
-                                        if (property.depositAmount != null && property.depositAmount > 0) {
-                                            SpecRow("میزان رهن", "${PersianUtils.formatPrice(property.depositAmount)} تومان")
-                                        }
-                                        if (property.rentAmount != null && property.rentAmount > 0) {
-                                            SpecRow("میزان اجاره", "${PersianUtils.formatPrice(property.rentAmount)} تومان")
-                                        }
+                                var financialShown = false
+                                if (property.fullDepositAmount != null && property.fullDepositAmount > 0) {
+                                    SpecRow("میزان رهن کامل", "${PersianUtils.formatPrice(property.fullDepositAmount)} تومان")
+                                    financialShown = true
+                                }
+                                if ((property.depositAmount != null && property.depositAmount > 0) || (property.rentAmount != null && property.rentAmount > 0)) {
+                                    if (property.depositAmount != null && property.depositAmount > 0) {
+                                        SpecRow("میزان رهن", "${PersianUtils.formatPrice(property.depositAmount)} تومان")
                                     }
-                                    "FULL_MORTGAGE" -> {
-                                        SpecRow("میزان رهن کامل", "${PersianUtils.formatPrice(property.depositAmount)} تومان")
+                                    if (property.rentAmount != null && property.rentAmount > 0) {
+                                        SpecRow("میزان اجاره", "${PersianUtils.formatPrice(property.rentAmount)} تومان")
                                     }
-                                    "FULL_RENT" -> {
-                                        SpecRow("میزان اجاره کامل", "${PersianUtils.formatPrice(property.rentAmount)} تومان")
-                                    }
+                                    financialShown = true
+                                }
+                                if (property.fullRentAmount != null && property.fullRentAmount > 0) {
+                                    SpecRow("میزان اجاره کامل", "${PersianUtils.formatPrice(property.fullRentAmount)} تومان")
+                                    financialShown = true
+                                }
+                                if (!financialShown) {
+                                    SpecRow("مبلغ", "توافقی")
                                 }
                             }
                         }
@@ -3196,15 +3250,49 @@ fun BackupRestoreDialog(
     properties: List<Property>,
     onDismiss: () -> Unit,
     onExport: (List<Property>) -> Unit,
-    onImport: (String) -> Unit
+    onImport: (String) -> Unit,
+    onGetBackupJson: (List<Property>) -> String
 ) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("melkup_prefs", android.content.Context.MODE_PRIVATE) }
-    var agencyName by remember { mutableStateOf(prefs.getString("agency_name", "") ?: "") }
-    var customHeader by remember { mutableStateOf(prefs.getString("custom_header", "") ?: "") }
-    var customFooter by remember { mutableStateOf(prefs.getString("custom_footer", "") ?: "") }
     var importText by remember { mutableStateOf("") }
     var selectedForBackup by remember(properties) { mutableStateOf(properties.toSet()) }
+
+    var backupJsonToSave by remember { mutableStateOf("") }
+
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(backupJsonToSave.toByteArray(Charsets.UTF_8))
+                }
+                Toast.makeText(context, "فایل پشتیبان با موفقیت ذخیره شد.", Toast.LENGTH_LONG).show()
+            } catch (e: java.lang.Exception) {
+                Toast.makeText(context, "خطا در ذخیره فایل پشتیبان: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    val openDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val content = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    inputStream.bufferedReader().use { it.readText() }
+                }
+                if (!content.isNullOrEmpty()) {
+                    importText = content
+                    Toast.makeText(context, "فایل پشتیبان بارگذاری شد. لطفاً دکمه بازیابی را بزنید.", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(context, "فایل انتخابی خالی است.", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: java.lang.Exception) {
+                Toast.makeText(context, "خطا در خواندن فایل: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -3218,60 +3306,6 @@ fun BackupRestoreDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    text = "⚙️ تنظیمات و پشتیبان‌گیری",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                
-                // Agency Name Setting
-                Text("تنظیمات آژانس املاک:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                OutlinedTextField(
-                    value = agencyName,
-                    onValueChange = {
-                        agencyName = it
-                        prefs.edit().putString("agency_name", it).apply()
-                    },
-                    label = { Text("نام بنگاه / آژانس (اختیاری)") },
-                    placeholder = { Text("مثال: املاک پارس", fontSize = 11.sp) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-                Text(
-                    text = "در صورت ثبت، نام بنگاه شما به‌طور خودکار در پرامپت‌های تولیدی درج می‌شود.",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-
-                Divider()
-
-                Text("سربرگ و ته برگ سفارشی متن کپی شده:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                OutlinedTextField(
-                    value = customHeader,
-                    onValueChange = {
-                        customHeader = it
-                        prefs.edit().putString("custom_header", it).apply()
-                    },
-                    label = { Text("سربرگ سفارشی (بالای متن کپی)") },
-                    placeholder = { Text("مثال: ⚜️ گروه مشاورین املاک رویال ⚜️", fontSize = 11.sp) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-                OutlinedTextField(
-                    value = customFooter,
-                    onValueChange = {
-                        customFooter = it
-                        prefs.edit().putString("custom_footer", it).apply()
-                    },
-                    label = { Text("ته برگ سفارشی (پایین متن کپی)") },
-                    placeholder = { Text("مثال: 📞 تلفن تماس: ۰۹۱۲۳۴۵۶۷۸۹", fontSize = 11.sp) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
-                )
-
-                Divider()
-
                 Text(
                     text = "💾 پشتیبان‌گیری و بازیابی آفلاین",
                     fontWeight = FontWeight.Bold,
@@ -3413,6 +3447,25 @@ fun BackupRestoreDialog(
                     Text("تهیه پشتیبان (کپی کد پشتیبان)")
                 }
 
+                OutlinedButton(
+                    onClick = {
+                        if (selectedForBackup.isEmpty()) {
+                            Toast.makeText(context, "لطفاً حداقل یک فایل را انتخاب کنید.", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val json = onGetBackupJson(selectedForBackup.toList())
+                            backupJsonToSave = json
+                            val dateCode = PersianUtils.getPersianDateCode()
+                            createDocumentLauncher.launch("backup_$dateCode")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Default.Save, null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("تولید فایل پشتیبان تکست (.txt) 📂")
+                }
+
                 Divider()
 
                 // Import
@@ -3424,6 +3477,18 @@ fun BackupRestoreDialog(
                     modifier = Modifier.fillMaxWidth().height(80.dp),
                     shape = RoundedCornerShape(10.dp)
                 )
+
+                OutlinedButton(
+                    onClick = {
+                        openDocumentLauncher.launch(arrayOf("text/plain"))
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Default.Add, null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("انتخاب و بارگذاری فایل پشتیبان (.txt) 📄")
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -4387,7 +4452,9 @@ fun SettingsAndBackupScreen(
     onImport: (String) -> Unit,
     licenseStatus: LicenseStatus,
     onLicenseChanged: () -> Unit,
-    propertiesCount: Int
+    propertiesCount: Int,
+    onShowCustomization: () -> Unit = {},
+    onShowBackupDialog: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("melkup_prefs", android.content.Context.MODE_PRIVATE) }
@@ -4395,8 +4462,6 @@ fun SettingsAndBackupScreen(
     var customHeader by remember { mutableStateOf(prefs.getString("custom_header", "") ?: "") }
     var customFooter by remember { mutableStateOf(prefs.getString("custom_footer", "") ?: "") }
     var copyFormat by remember { mutableStateOf(prefs.getString("copy_format", "standard") ?: "standard") }
-    var importText by remember { mutableStateOf("") }
-    var selectedForBackup by remember(properties) { mutableStateOf(properties.toSet()) }
 
     var compactShowType by remember { mutableStateOf(prefs.getBoolean("compact_show_type", true)) }
     var compactShowRegion by remember { mutableStateOf(prefs.getBoolean("compact_show_region", true)) }
@@ -4736,6 +4801,34 @@ fun SettingsAndBackupScreen(
                         Text("ثبت")
                     }
                 }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Telegram Channel button
+                Button(
+                    onClick = {
+                        try {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://t.me/mostafamodaberiapps"))
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "خطا در باز کردن تلگرام", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF24A1DE),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(
+                        painter = painterResource(id = android.R.drawable.ic_menu_send),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("ورود به کانال تلگرام جهت خرید لایسنس 💬", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
             }
         }
 
@@ -4794,7 +4887,7 @@ fun SettingsAndBackupScreen(
         ) {
             val formats = listOf(
                 "standard" to "استاندارد 🌟",
-                "plain" to "متن ساده 📄",
+                "customized" to "شخصی سازی ⚙️",
                 "compact" to "خلاصه تک‌خطی ⚡"
             )
             formats.forEach { (formatKey, formatLabel) ->
@@ -4811,6 +4904,9 @@ fun SettingsAndBackupScreen(
                         .clickable {
                             copyFormat = formatKey
                             prefs.edit().putString("copy_format", formatKey).apply()
+                            if (formatKey == "customized") {
+                                onShowCustomization()
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -4904,168 +5000,58 @@ fun SettingsAndBackupScreen(
 
         Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
 
-        Text(
-            text = "💾 پشتیبان‌گیری و بازیابی آفلاین",
-            fontWeight = FontWeight.Bold,
-            fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = "با استفاده از این بخش می‌توانید اطلاعات موارد دلخواه را صادر کرده و کپی بگیرید یا از فایل پشتیبان کپی شده بازیابی کنید.",
-            fontSize = 12.sp,
-            lineHeight = 18.sp
-        )
-
-        Text(
-            text = "انتخاب فایل‌ها برای پشتیبان‌گیری:",
-            fontWeight = FontWeight.Bold,
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-        )
-
-        // Select All / Deselect All
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(
-                onClick = { selectedForBackup = properties.toSet() },
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
-            ) {
-                Text("انتخاب همه", fontSize = 11.sp)
-            }
-            TextButton(
-                onClick = { selectedForBackup = emptySet() },
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
-            ) {
-                Text("حذف انتخاب‌ها", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = "انتخاب شده: ${selectedForBackup.size} از ${properties.size}",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        // Scrollable container for properties with checkboxes
-        Box(
+        // Large Premium Card to launch Backup Dialog
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(180.dp)
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f))
+                .clickable { onShowBackupDialog() },
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
         ) {
-            if (properties.isEmpty()) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("هیچ فایلی برای پشتیبان‌گیری وجود ندارد.", fontSize = 11.sp, color = Color.Gray)
+                    Icon(
+                        imageVector = Icons.Default.Backup,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
-            } else {
-                val scrollState = rememberScrollState()
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(scrollState)
-                        .padding(4.dp)
-                ) {
-                    properties.forEach { p ->
-                        val isChecked = selectedForBackup.contains(p)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable {
-                                    selectedForBackup = if (isChecked) {
-                                        selectedForBackup - p
-                                    } else {
-                                        selectedForBackup + p
-                                    }
-                                }
-                                .padding(horizontal = 6.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = isChecked,
-                                onCheckedChange = { checked ->
-                                    selectedForBackup = if (checked == true) {
-                                        selectedForBackup + p
-                                    } else {
-                                        selectedForBackup - p
-                                    }
-                                },
-                                modifier = Modifier.scale(0.85f)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Column {
-                                Text(
-                                    text = "کد ${p.code} • ${p.region}",
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "${p.area.toInt()} متر • ${p.bedrooms} خوابه • ${when(p.type) {
-                                        "APARTMENT" -> "آپارتمان"
-                                        "VILLA" -> "ویلایی"
-                                        "LAND" -> "زمین"
-                                        "COMMERCIAL" -> "تجاری"
-                                        else -> p.type
-                                    }}",
-                                    fontSize = 10.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
-                            }
-                        }
-                        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.05f))
-                    }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "💾 پشتیبان‌گیری و بازیابی اطلاعات",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.5.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "کپی کد پشتیبان، تولید فایل متنی (.txt) یا بازیابی فایل‌ها",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowLeft,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
         }
 
-        // Export Button
-        Button(
-            onClick = {
-                if (selectedForBackup.isEmpty()) {
-                    Toast.makeText(context, "لطفاً حداقل یک فایل را انتخاب کنید.", Toast.LENGTH_SHORT).show()
-                } else {
-                    onExport(selectedForBackup.toList())
-                }
-            },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(10.dp)
-        ) {
-            Icon(Icons.Default.ContentCopy, null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("تهیه پشتیبان (کپی کد پشتیبان)", fontWeight = FontWeight.Bold)
-        }
-
-        Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-
-        Text("بازیابی اطلاعات:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-        OutlinedTextField(
-            value = importText,
-            onValueChange = { importText = it },
-            placeholder = { Text("کد پشتیبان را در اینجا قرار دهید (Paste)...", fontSize = 11.sp) },
-            modifier = Modifier.fillMaxWidth().height(100.dp),
-            shape = RoundedCornerShape(10.dp)
-        )
-
-        Button(
-            onClick = { if (importText.isNotEmpty()) onImport(importText) },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(10.dp),
-            enabled = importText.isNotEmpty()
-        ) {
-            Text("بازیابی پشتیبان", fontWeight = FontWeight.Bold)
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)),
@@ -5447,6 +5433,407 @@ fun LicenseLockScreen(
                     Icon(imageVector = Icons.Default.Check, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("فعال‌سازی برنامه", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun FullScreenImageViewer(
+    images: List<String>,
+    initialIndex: Int,
+    onClose: () -> Unit
+) {
+    val pagerState = rememberPagerState(initialPage = initialIndex) { images.size }
+    val coroutineScope = rememberCoroutineScope()
+
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
+    ) {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            ) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                pageSpacing = 16.dp
+            ) { page ->
+                var scale by remember { mutableStateOf(1f) }
+                var offset by remember { mutableStateOf(Offset.Zero) }
+                
+                LaunchedEffect(pagerState.currentPage) {
+                    scale = 1f
+                    offset = Offset.Zero
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(1f, 5f)
+                                if (scale > 1f) {
+                                    offset += pan
+                                } else {
+                                    offset = Offset.Zero
+                                }
+                            }
+                        }
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    if (scale > 1f) {
+                                        scale = 1f
+                                        offset = Offset.Zero
+                                    } else {
+                                        scale = 2.5f
+                                    }
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = images[page],
+                        contentDescription = "تصویر ملک بزرگ‌نمایی شده",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offset.x,
+                                translationY = offset.y
+                            ),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+
+            // Top bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 24.dp)
+                    .align(Alignment.TopCenter),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier
+                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "بستن",
+                        tint = Color.White
+                    )
+                }
+
+                Text(
+                    text = "${PersianUtils.formatNumber(pagerState.currentPage + 1)} از ${PersianUtils.formatNumber(images.size)}",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+
+            // Navigation buttons
+            if (pagerState.currentPage > 0) {
+                IconButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 16.dp)
+                        .size(48.dp)
+                        .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowLeft,
+                        contentDescription = "قبلی",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+
+            if (pagerState.currentPage < images.size - 1) {
+                IconButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 16.dp)
+                        .size(48.dp)
+                        .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowRight,
+                        contentDescription = "بعدی",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+        }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CustomizationDialog(
+    onDismiss: () -> Unit,
+    context: android.content.Context
+) {
+    val prefs = remember { context.getSharedPreferences("melkup_prefs", android.content.Context.MODE_PRIVATE) }
+    
+    // Emoji states
+    var emojiApartment by remember { mutableStateOf(prefs.getString("custom_emoji_apartment", "🏢") ?: "🏢") }
+    var emojiVilla by remember { mutableStateOf(prefs.getString("custom_emoji_villa", "🏡") ?: "🏡") }
+    var emojiHouse by remember { mutableStateOf(prefs.getString("custom_emoji_house", "🏠") ?: "🏠") }
+    var emojiRegion by remember { mutableStateOf(prefs.getString("custom_emoji_region", "📍") ?: "📍") }
+    var emojiArea by remember { mutableStateOf(prefs.getString("custom_emoji_area", "📐") ?: "📐") }
+    var emojiBedrooms by remember { mutableStateOf(prefs.getString("custom_emoji_bedrooms", "🛏") ?: "🛏") }
+    var emojiParking by remember { mutableStateOf(prefs.getString("custom_emoji_parking", "🚗") ?: "🚗") }
+    var emojiCabinet by remember { mutableStateOf(prefs.getString("custom_emoji_cabinet", "🚪") ?: "🚪") }
+    var emojiAmenities by remember { mutableStateOf(prefs.getString("custom_emoji_amenities", "✨") ?: "✨") }
+    var emojiPrice by remember { mutableStateOf(prefs.getString("custom_emoji_price", "💰") ?: "💰") }
+    var emojiDescription by remember { mutableStateOf(prefs.getString("custom_emoji_description", "📝") ?: "📝") }
+    
+    // Separator states
+    var separatorEnabled by remember { mutableStateOf(prefs.getBoolean("separator_enabled", false)) }
+    var separatorText by remember { mutableStateOf(prefs.getString("separator_text", "---") ?: "---") }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .widthIn(max = 500.dp)
+                .padding(16.dp)
+                .wrapContentHeight(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Title
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = "شخصی‌سازی فرمت کپی اطلاعات",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                // Section 1: Emojis
+                Text(
+                    text = "🎨 تغییر ایموجی‌ها در متن کپی:",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                // Layout emoji input fields
+                val emojiFields = listOf(
+                    Triple("آپارتمان", emojiApartment) { s: String -> emojiApartment = s },
+                    Triple("ویلا", emojiVilla) { s: String -> emojiVilla = s },
+                    Triple("خانه/کلنگی", emojiHouse) { s: String -> emojiHouse = s },
+                    Triple("محله/منطقه", emojiRegion) { s: String -> emojiRegion = s },
+                    Triple("متراژ", emojiArea) { s: String -> emojiArea = s },
+                    Triple("تعداد خواب", emojiBedrooms) { s: String -> emojiBedrooms = s },
+                    Triple("پارکینگ", emojiParking) { s: String -> emojiParking = s },
+                    Triple("کابینت", emojiCabinet) { s: String -> emojiCabinet = s },
+                    Triple("امکانات", emojiAmenities) { s: String -> emojiAmenities = s },
+                    Triple("قیمت/مالی", emojiPrice) { s: String -> emojiPrice = s },
+                    Triple("توضیحات", emojiDescription) { s: String -> emojiDescription = s }
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    emojiFields.chunked(2).forEach { rowFields ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowFields.forEach { (label, value, onValueChange) ->
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                                    OutlinedTextField(
+                                        value = value,
+                                        onValueChange = { if (it.length <= 4) onValueChange(it) }, // support 1-2 characters/emojis
+                                        modifier = Modifier.width(54.dp).height(44.dp),
+                                        textStyle = androidx.compose.ui.text.TextStyle(
+                                            textAlign = TextAlign.Center,
+                                            fontSize = 13.sp
+                                        ),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(6.dp)
+                                    )
+                                }
+                            }
+                            if (rowFields.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+
+                // Reset to default button
+                TextButton(
+                    onClick = {
+                        emojiApartment = "🏢"
+                        emojiVilla = "🏡"
+                        emojiHouse = "🏠"
+                        emojiRegion = "📍"
+                        emojiArea = "📐"
+                        emojiBedrooms = "🛏"
+                        emojiParking = "🚗"
+                        emojiCabinet = "🚪"
+                        emojiAmenities = "✨"
+                        emojiPrice = "💰"
+                        emojiDescription = "📝"
+                    },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("بازنشانی به ایموجی‌های پیش‌فرض 🔄", fontSize = 11.sp)
+                }
+
+                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                // Section 2: Separator
+                Text(
+                    text = "🔗 جدا کننده بین دو فایل (در کپی گروهی):",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("فعال کردن جدا کننده بین دو فایل", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "در صورت غیرفعال بودن، بین فایل‌ها یک سطر خالی خواهد بود.",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Switch(
+                        checked = separatorEnabled,
+                        onCheckedChange = { separatorEnabled = it }
+                    )
+                }
+
+                if (separatorEnabled) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("عبارت یا کاراکتر جدا کننده:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                        OutlinedTextField(
+                            value = separatorText,
+                            onValueChange = { separatorText = it },
+                            placeholder = { Text("مثال: ---") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        Text(
+                            text = "مثال با عبارت \"---\": پس از هر فایل، یک سطر خالی، یک سطر حاوی --- و مجدد یک سطر خالی قرار می‌گیرد.",
+                            fontSize = 10.sp,
+                            lineHeight = 14.sp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+
+                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                // Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("انصراف")
+                    }
+                    Button(
+                        onClick = {
+                            prefs.edit().apply {
+                                putString("custom_emoji_apartment", emojiApartment)
+                                putString("custom_emoji_villa", emojiVilla)
+                                putString("custom_emoji_house", emojiHouse)
+                                putString("custom_emoji_region", emojiRegion)
+                                putString("custom_emoji_area", emojiArea)
+                                putString("custom_emoji_bedrooms", emojiBedrooms)
+                                putString("custom_emoji_parking", emojiParking)
+                                putString("custom_emoji_cabinet", emojiCabinet)
+                                putString("custom_emoji_amenities", emojiAmenities)
+                                putString("custom_emoji_price", emojiPrice)
+                                putString("custom_emoji_description", emojiDescription)
+                                putBoolean("separator_enabled", separatorEnabled)
+                                putString("separator_text", separatorText)
+                            }.apply()
+                            onDismiss()
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("ذخیره تغییرات")
+                    }
                 }
             }
         }

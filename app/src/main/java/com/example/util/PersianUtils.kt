@@ -83,6 +83,16 @@ object PersianUtils {
         return "امروز " + getPersianDate(System.currentTimeMillis())
     }
 
+    fun getPersianDateCode(timestamp: Long? = null): String {
+        val ts = timestamp ?: System.currentTimeMillis()
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Tehran")).apply { timeInMillis = ts }
+        val gYear = cal.get(Calendar.YEAR)
+        val gMonth = cal.get(Calendar.MONTH) + 1
+        val gDay = cal.get(Calendar.DAY_OF_MONTH)
+        val jalali = gregorianToJalali(gYear, gMonth, gDay)
+        return String.format("%04d%02d%02d", jalali[0], jalali[1], jalali[2])
+    }
+
     private fun gregorianToJalali(gy: Int, gm: Int, gd: Int): IntArray {
         val gDaysInMonth = intArrayOf(0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
         val jDaysInMonth = intArrayOf(0, 31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29)
@@ -125,14 +135,33 @@ object PersianUtils {
         return intArrayOf(jy, jm, jd)
     }
 
-    fun getPropertyTypeEmoji(type: String): String {
+    fun getCustomEmoji(context: Context?, key: String, default: String): String {
+        if (context == null) return default
+        val prefs = context.getSharedPreferences("melkup_prefs", Context.MODE_PRIVATE)
+        return prefs.getString("custom_emoji_$key", default) ?: default
+    }
+
+    fun getGroupJoinSeparator(context: Context?): String {
+        if (context == null) return "\n\n"
+        val prefs = context.getSharedPreferences("melkup_prefs", Context.MODE_PRIVATE)
+        val separatorEnabled = prefs.getBoolean("separator_enabled", false)
+        if (!separatorEnabled) return "\n\n"
+        val separatorText = prefs.getString("separator_text", "---") ?: "---"
+        return "\n\n$separatorText\n\n"
+    }
+
+    fun getPropertyTypeEmoji(context: Context?, type: String): String {
         return when {
-            type.contains("آپارتمان") -> "🏢"
-            type.contains("ویلا") || type.contains("باغ") -> "🏡"
-            type.contains("خانه") || type.contains("کلنگی") || type.contains("مستغلات") -> "🏠"
-            type.contains("تجاری") || type.contains("مغازه") || type.contains("دفتر") || type.contains("اداری") -> "🏢"
-            else -> "🏠"
+            type.contains("آپارتمان") -> getCustomEmoji(context, "apartment", "🏢")
+            type.contains("ویلا") || type.contains("باغ") -> getCustomEmoji(context, "villa", "🏡")
+            type.contains("خانه") || type.contains("کلنگی") || type.contains("مستغلات") -> getCustomEmoji(context, "house", "🏠")
+            type.contains("تجاری") || type.contains("مغازه") || type.contains("دفتر") || type.contains("اداری") -> getCustomEmoji(context, "apartment", "🏢")
+            else -> getCustomEmoji(context, "house", "🏠")
         }
+    }
+
+    fun getPropertyTypeEmoji(type: String): String {
+        return getPropertyTypeEmoji(null, type)
     }
 
     fun generatePropertyPriceText(p: Property): String {
@@ -178,20 +207,23 @@ object PersianUtils {
         val parts = mutableListOf<String>()
         
         // 1. Emoji and Code/Type
-        val emoji = getPropertyTypeEmoji(p.type)
+        val emoji = getPropertyTypeEmoji(context, p.type)
         val firstLine = if (p.code.isNotEmpty()) "$emoji ${p.code} - ${p.type}" else "$emoji ${p.type}"
         parts.add(firstLine)
         
         // 2. Region
         if (p.region.isNotEmpty()) {
-            parts.add("📍 ${p.region}")
+            val regionEmoji = getCustomEmoji(context, "region", "📍")
+            parts.add("$regionEmoji ${p.region}")
         }
         
         // 3. Area
-        parts.add("📐 ${formatArea(p.area)} متر")
+        val areaEmoji = getCustomEmoji(context, "area", "📐")
+        parts.add("$areaEmoji ${formatArea(p.area)} متر")
         
         // 4. Bedrooms
-        parts.add("🛏 ${formatNumber(p.bedrooms)} خواب")
+        val bedroomsEmoji = getCustomEmoji(context, "bedrooms", "🛏")
+        parts.add("$bedroomsEmoji ${formatNumber(p.bedrooms)} خواب")
         
         // 5. Floors (if applicable)
         if (p.type == "آپارتمان") {
@@ -209,15 +241,18 @@ object PersianUtils {
         }
         
         // 6. Parking
-        parts.add("🚗 پارکینگ: ${if (p.hasParking) "دارد" else "ندارد"}")
+        val parkingEmoji = getCustomEmoji(context, "parking", "🚗")
+        parts.add("$parkingEmoji پارکینگ: ${if (p.hasParking) "دارد" else "ندارد"}")
         
         // 7. Cabinet and Amenities combined
         val cabAndAmenParts = mutableListOf<String>()
         if (p.cabinetType.isNotEmpty()) {
-            cabAndAmenParts.add("🚪 کابینت: ${p.cabinetType}")
+            val cabinetEmoji = getCustomEmoji(context, "cabinet", "🚪")
+            cabAndAmenParts.add("$cabinetEmoji کابینت: ${p.cabinetType}")
         }
         if (p.otherAmenities.isNotEmpty()) {
-            cabAndAmenParts.add("✨ امکانات: ${p.otherAmenities}")
+            val amenitiesEmoji = getCustomEmoji(context, "amenities", "✨")
+            cabAndAmenParts.add("$amenitiesEmoji امکانات: ${p.otherAmenities}")
         }
         if (cabAndAmenParts.isNotEmpty()) {
             parts.add(cabAndAmenParts.joinToString(" - "))
@@ -225,19 +260,25 @@ object PersianUtils {
         
         // 8. Financial Mode & Price
         val priceText = generatePropertyPriceText(p)
-        parts.add("💰 $priceText")
+        val priceEmoji = getCustomEmoji(context, "price", "💰")
+        parts.add("$priceEmoji $priceText")
         
         // 9. Description
         if (p.description.trim().isNotEmpty()) {
-            parts.add("📝 ${p.description.trim()}")
+            val descriptionEmoji = getCustomEmoji(context, "description", "📝")
+            parts.add("$descriptionEmoji ${p.description.trim()}")
         }
         
         return parts.joinToString("\n")
     }
 
     fun generatePropertyCompactSummaryText(p: Property): String {
+        return generatePropertyCompactSummaryText(null, p)
+    }
+
+    fun generatePropertyCompactSummaryText(context: Context?, p: Property): String {
         val parts = mutableListOf<String>()
-        val emoji = getPropertyTypeEmoji(p.type)
+        val emoji = getPropertyTypeEmoji(context, p.type)
         
         // First part combined with emoji or starts with emoji
         if (p.code.isNotEmpty()) {
@@ -275,10 +316,12 @@ object PersianUtils {
         
         // Line 2 (newline separated, starts with 💰 and contains the price)
         val priceText = generatePropertyPriceText(p)
-        val line2 = "💰 $priceText"
+        val priceEmoji = getCustomEmoji(context, "price", "💰")
+        val line2 = "$priceEmoji $priceText"
         
         return if (p.description.trim().isNotEmpty()) {
-            "$line1\n$line2\n📝 ${p.description.trim()}"
+            val descriptionEmoji = getCustomEmoji(context, "description", "📝")
+            "$line1\n$line2\n$descriptionEmoji ${p.description.trim()}"
         } else {
             "$line1\n$line2"
         }
@@ -311,7 +354,7 @@ object PersianUtils {
 
     fun generateSingleTelegramOutput(context: Context?, p: Property, format: String = "standard"): String {
         val baseText = if (format == "compact") {
-            generatePropertyCompactSummaryText(p)
+            generatePropertyCompactSummaryText(context, p)
         } else {
             generatePropertySingleLineText(context, p)
         }
@@ -324,17 +367,19 @@ object PersianUtils {
     }
 
     fun generateGroupSummaryOutput(context: Context?, properties: List<Property>): String {
-        val body = properties.joinToString("\n\n") { p ->
-            generatePropertyCompactSummaryText(p)
+        val separator = getGroupJoinSeparator(context)
+        val body = properties.joinToString(separator) { p ->
+            generatePropertyCompactSummaryText(context, p)
         }
         return buildCopyWithHeaderFooter(context, body)
     }
 
     // Group Full Output (Using single-line dash-separated format as default)
     fun generateGroupFullOutput(properties: List<Property>, format: String = "standard", context: Context? = null): String {
-        val body = properties.joinToString("\n\n") { p ->
+        val separator = getGroupJoinSeparator(context)
+        val body = properties.joinToString(separator) { p ->
             if (format == "compact") {
-                generatePropertyCompactSummaryText(p)
+                generatePropertyCompactSummaryText(context, p)
             } else {
                 generatePropertySingleLineText(context, p)
             }
